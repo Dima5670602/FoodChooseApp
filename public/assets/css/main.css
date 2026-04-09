@@ -230,10 +230,17 @@ tr:hover td { background: rgba(232,90,42,.02); }
 .photo-preview { width: 80px; height: 80px; border-radius: 50%; background: var(--orange); display: flex; align-items: center; justify-content: center; font-size: 30px; color: white; overflow: hidden; border: 3px solid var(--border); }
 .photo-preview img { width: 100%; height: 100%; object-fit: cover; }
 
+/* ─── Responsive grid helpers ────────────────────────── */
+.page-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.page-grid-sidebar { display: grid; grid-template-columns: 1fr 320px; gap: 18px; align-items: start; }
+.page-grid-sidebar-sm { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: start; }
+.rest-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+
 /* ─── RESPONSIVE ─────────────────────────────────────── */
 @media (max-width: 900px) {
   .stats-grid { grid-template-columns: repeat(2,1fr); }
   .form-row-3 { grid-template-columns: 1fr 1fr; }
+  .page-grid-sidebar { grid-template-columns: 1fr; }
 }
 @media (max-width: 768px) {
   :root { --sidebar-w: 260px; }
@@ -247,6 +254,10 @@ tr:hover td { background: rgba(232,90,42,.02); }
   .stats-grid { grid-template-columns: repeat(2,1fr); gap: 10px; }
   .form-row { grid-template-columns: 1fr; }
   .form-row-3 { grid-template-columns: 1fr; }
+  .page-grid { grid-template-columns: 1fr; }
+  .page-grid-sidebar { grid-template-columns: 1fr; }
+  .page-grid-sidebar-sm { grid-template-columns: 1fr; }
+  .rest-grid { grid-template-columns: repeat(2,1fr); }
   .chat-layout { grid-template-columns: 1fr; height: auto; }
   .chat-sidebar { display: none; border-right: none; border-bottom: 1px solid var(--border); }
   .chat-sidebar.show-mobile { display: block; }
@@ -254,9 +265,15 @@ tr:hover td { background: rgba(232,90,42,.02); }
   td, th { padding: 8px; }
   .topbar { padding: 11px 16px; }
   .topbar-title { font-size: 17px; }
+  .notif-dropdown { width: calc(100vw - 32px); right: -60px; }
+  .modal { max-height: 85vh; }
 }
 @media (max-width: 480px) {
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .modal { padding: 20px; }
   .btn { padding: 8px 13px; font-size: 12.5px; }
+  #toastContainer { left: 16px; right: 16px; }
+  .toast { max-width: 100%; }
+  .order-banner { flex-direction: column; align-items: flex-start; }
+  .rest-grid { grid-template-columns: 1fr; }
 }

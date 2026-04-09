@@ -69,7 +69,7 @@
       <div class="stat-card"><div class="stat-icon">🛒</div><div class="stat-number" id="s-today">—</div><div class="stat-label">Commandes aujourd'hui</div></div>
       <div class="stat-card"><div class="stat-icon">⏳</div><div class="stat-number" id="s-pending">—</div><div class="stat-label">En attente validation</div></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+    <div class="page-grid">
       <div class="card">
         <div class="card-header"><span class="card-title">🤝 Restaurants affiliés</span><button class="btn btn-primary btn-sm" onclick="switchToPage('allrestaurants')">+ Affilier</button></div>
         <div class="card-body" id="dashAffiliations"></div>
@@ -89,7 +89,7 @@
         <input class="form-control" id="restSearch" placeholder="🔍 Rechercher..." style="width:220px;font-size:13px" oninput="filterRestaurants()">
       </div>
       <div class="card-body">
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px" id="allRestGrid"></div>
+        <div class="rest-grid" id="allRestGrid"></div>
       </div>
     </div>
   </div>
@@ -99,7 +99,7 @@
     <div class="card">
       <div class="card-header"><span class="card-title">🤝 Mes restaurants affiliés</span></div>
       <div class="card-body">
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px" id="myAffGrid"></div>
+        <div class="rest-grid" id="myAffGrid"></div>
       </div>
     </div>
   </div>
@@ -152,7 +152,7 @@
 
   <!-- ═══ EMPLOYEES ═══ -->
   <div class="page" id="page-employees">
-    <div style="display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start">
+    <div class="page-grid-sidebar">
       <div class="card">
         <div class="card-header"><span class="card-title">Employés enregistrés</span><button class="btn btn-outline btn-sm" onclick="loadEmployees()">🔄</button></div>
         <div class="card-body">
@@ -250,7 +250,7 @@
 
   <!-- ═══ SETTINGS ═══ -->
   <div class="page" id="page-settings">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;max-width:800px">
+    <div class="page-grid" style="max-width:800px">
       <div class="card">
         <div class="card-header"><span class="card-title">🖼 Photo / Logo</span></div>
         <div class="card-body" style="text-align:center">
