@@ -169,7 +169,8 @@ function readFileAsBase64(file) {
 
 // ─── Password visibility toggle ───────────────────────
 function initPasswordToggles() {
-  document.querySelectorAll('.pw-toggle').forEach(btn => {
+  document.querySelectorAll('.pw-toggle:not([data-pw-init])').forEach(btn => {
+    btn.setAttribute('data-pw-init', '1');
     btn.addEventListener('click', () => {
       const input = btn.previousElementSibling || btn.closest('.pw-wrap').querySelector('input');
       if (input) {

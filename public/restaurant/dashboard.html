@@ -561,18 +561,20 @@ async function handlePhoto(input) {
   document.getElementById('photoImg').src = b64;
   document.getElementById('photoImg').style.display = 'block';
   document.getElementById('photoPreview').style.background = 'transparent';
+  try {
+    await apiFetch('/api/restaurant/profile', { method: 'PUT', body: JSON.stringify({ photoUrl: b64 }) }, token);
+    document.getElementById('sidebarAvatar').innerHTML = `<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
+    toast('Photo mise à jour !', 'success');
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 async function saveProfile() {
   const photoUrl = document.getElementById('photoImg').src || null;
   try {
-    await apiFetch('/api/restaurant/profile', { method: 'PUT', body: JSON.stringify({ name: document.getElementById('pName').value, phone: document.getElementById('pPhone').value, location: document.getElementById('pLocation').value, address: document.getElementById('pAddress').value, paymentTypes: profileData?.payment_types||[], specialties: profileData?.specialties||[], photoUrl: photoUrl && photoUrl.startsWith('data:') ? photoUrl : null }) }, token);
+    await apiFetch('/api/restaurant/profile', { method: 'PUT', body: JSON.stringify({ name: document.getElementById('pName').value, phone: document.getElementById('pPhone').value, location: document.getElementById('pLocation').value, address: document.getElementById('pAddress').value, paymentTypes: profileData?.payment_types||[], specialties: profileData?.specialties||[], photoUrl: (photoUrl && !photoUrl.startsWith('data:')) ? photoUrl : null }) }, token);
     toast('Profil mis à jour !', 'success');
     localStorage.setItem('fc_name', document.getElementById('pName').value);
     document.getElementById('sidebarName').textContent = document.getElementById('pName').value;
-    if (photoUrl && photoUrl.startsWith('data:')) {
-      document.getElementById('sidebarAvatar').innerHTML = `<img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover">`;
-    }
   } catch(e) { toast(e.message, 'error'); }
 }
 

@@ -200,10 +200,10 @@ app.post('/api/auth/restaurant/register', async (req, res) => {
       'INSERT INTO restaurants (name,address,location,email,phone,payment_types,specialties,password_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,name,email',
       [name, address||'', location||'', email, phone||'', JSON.stringify(paymentTypes||[]), JSON.stringify(specialties||[]), hash]
     );
-    await sendMail(email, '🍽 Bienvenue sur FoodChooseApp !', welcomeEmailHtml(name,
-      `<p style="color:#4A3728">Votre restaurant <strong>${name}</strong> est maintenant enregistré sur la plateforme. Connectez-vous pour commencer à gérer vos menus et recevoir des commandes.</p>`
-    ));
     res.status(201).json(r.rows[0]);
+    sendMail(email, '🍽 Bienvenue sur FoodChooseApp !', welcomeEmailHtml(name,
+      `<p style="color:#4A3728">Votre restaurant <strong>${name}</strong> est maintenant enregistré sur la plateforme. Connectez-vous pour commencer à gérer vos menus et recevoir des commandes.</p>`
+    )).catch(err => console.error('Email bienvenue restaurant:', err));
   } catch (e) {
     if (e.code === '23505') return res.status(400).json({ error: 'Email déjà utilisé' });
     res.status(500).json({ error: e.message });
@@ -233,10 +233,10 @@ app.post('/api/auth/company/register', async (req, res) => {
       'INSERT INTO companies (name,sector,phone,address,email,location,password_hash) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id,name,email',
       [name, sector||'', phone||'', address||'', email, location||'', hash]
     );
-    await sendMail(email, '🍽 Bienvenue sur FoodChooseApp !', welcomeEmailHtml(name,
-      `<p style="color:#4A3728">Votre entreprise <strong>${name}</strong> est enregistrée. Votre chargé(e) de commande peut maintenant se connecter et s'affilier aux restaurants.</p>`
-    ));
     res.status(201).json(r.rows[0]);
+    sendMail(email, '🍽 Bienvenue sur FoodChooseApp !', welcomeEmailHtml(name,
+      `<p style="color:#4A3728">Votre entreprise <strong>${name}</strong> est enregistrée. Votre chargé(e) de commande peut maintenant se connecter et s'affilier aux restaurants.</p>`
+    )).catch(err => console.error('Email bienvenue entreprise:', err));
   } catch (e) {
     if (e.code === '23505') return res.status(400).json({ error: 'Email déjà utilisé' });
     res.status(500).json({ error: e.message });
@@ -386,8 +386,8 @@ app.put('/api/restaurant/batches/:id/confirm', restaurantAuth, async (req, res) 
     const restName = req.user.name;
     await createNotification('company', batch.rows[0].company_id, '✅ Commande confirmée', `${restName} a confirmé réception de votre commande du ${batch.rows[0].batch_date}`, 'order', { batchId: req.params.id });
     const co = await pool.query('SELECT email,name FROM companies WHERE id=$1', [batch.rows[0].company_id]);
-    if (co.rows.length) await sendMail(co.rows[0].email, `✅ Commande confirmée — ${restName}`, welcomeEmailHtml(co.rows[0].name, `<p style="color:#4A3728"><strong>${restName}</strong> a confirmé réception de votre commande du ${batch.rows[0].batch_date}.</p>`));
     res.json({ message: 'Commande confirmée' });
+    if (co.rows.length) sendMail(co.rows[0].email, `✅ Commande confirmée — ${restName}`, welcomeEmailHtml(co.rows[0].name, `<p style="color:#4A3728"><strong>${restName}</strong> a confirmé réception de votre commande du ${batch.rows[0].batch_date}.</p>`)).catch(err => console.error('Email confirmation:', err));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -404,8 +404,8 @@ app.post('/api/restaurant/batches/:id/invoice', restaurantAuth, async (req, res)
     await pool.query("UPDATE orders SET status='invoiced' WHERE company_id=$1 AND restaurant_id=$2 AND order_date=$3", [batch.rows[0].company_id, req.user.id, batch.rows[0].batch_date]);
     await createNotification('company', batch.rows[0].company_id, '🧾 Nouvelle facture', `Facture de ${req.user.name} pour le ${batch.rows[0].batch_date} — ${totalAmount} FCFA`, 'invoice', { invoiceId: inv.rows[0].id });
     const co = await pool.query('SELECT email,name FROM companies WHERE id=$1', [batch.rows[0].company_id]);
-    if (co.rows.length) await sendMail(co.rows[0].email, `🧾 Facture reçue — ${req.user.name}`, welcomeEmailHtml(co.rows[0].name, `<p style="color:#4A3728">Vous avez reçu une facture de <strong>${req.user.name}</strong> d'un montant de <strong>${totalAmount} FCFA</strong> pour le ${batch.rows[0].batch_date}.</p>`));
     res.json({ invoiceId: inv.rows[0].id });
+    if (co.rows.length) sendMail(co.rows[0].email, `🧾 Facture reçue — ${req.user.name}`, welcomeEmailHtml(co.rows[0].name, `<p style="color:#4A3728">Vous avez reçu une facture de <strong>${req.user.name}</strong> d'un montant de <strong>${totalAmount} FCFA</strong> pour le ${batch.rows[0].batch_date}.</p>`)).catch(err => console.error('Email facture:', err));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -554,11 +554,11 @@ app.post('/api/messages', async (req, res) => {
     if (senderType === 'company') {
       await createNotification('restaurant', restaurantId, '💬 Nouveau message', content.substring(0,80), 'message', { companyId, restaurantId });
       const rest = await pool.query('SELECT email,name FROM restaurants WHERE id=$1', [restaurantId]);
-      if (rest.rows.length) await sendMail(rest.rows[0].email, '💬 Nouveau message FoodChooseApp', welcomeEmailHtml(rest.rows[0].name, `<p style="color:#4A3728">Vous avez reçu un message : <em>${content.substring(0,100)}</em></p>`));
+      if (rest.rows.length) sendMail(rest.rows[0].email, '💬 Nouveau message FoodChooseApp', welcomeEmailHtml(rest.rows[0].name, `<p style="color:#4A3728">Vous avez reçu un message : <em>${content.substring(0,100)}</em></p>`)).catch(err => console.error('Email message:', err));
     } else {
       await createNotification('company', companyId, '💬 Nouveau message', content.substring(0,80), 'message', { companyId, restaurantId });
       const co = await pool.query('SELECT email,name FROM companies WHERE id=$1', [companyId]);
-      if (co.rows.length) await sendMail(co.rows[0].email, '💬 Nouveau message FoodChooseApp', welcomeEmailHtml(co.rows[0].name, `<p style="color:#4A3728">Vous avez reçu un message : <em>${content.substring(0,100)}</em></p>`));
+      if (co.rows.length) sendMail(co.rows[0].email, '💬 Nouveau message FoodChooseApp', welcomeEmailHtml(co.rows[0].name, `<p style="color:#4A3728">Vous avez reçu un message : <em>${content.substring(0,100)}</em></p>`)).catch(err => console.error('Email message:', err));
     }
     res.status(201).json(r.rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -650,8 +650,9 @@ app.post('/api/admin/employees', companyOrAdminAuth, async (req, res) => {
       'INSERT INTO users (company_id,employee_id,first_name,last_name,email,password_hash) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id,employee_id,first_name,last_name,email',
       [companyId, employeeId.trim(), firstName.trim(), lastName.trim(), email.trim(), hash]
     );
+    res.status(201).json(r.rows[0]);
     const appUrl = process.env.APP_URL || 'http://localhost:3050';
-    await sendMail(email, '🍽 Vos identifiants FoodChooseApp',
+    sendMail(email, '🍽 Vos identifiants FoodChooseApp',
       `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;padding:40px;background:#FFF8F3;border-radius:12px;">
         <h1 style="color:#E85A2A;font-size:28px;">🍽 FoodChooseApp</h1>
         <h2 style="color:#2C1810;">Bonjour ${firstName} ${lastName},</h2>
@@ -669,8 +670,7 @@ app.post('/api/admin/employees', companyOrAdminAuth, async (req, res) => {
         <p style="color:#4A3728;font-size:13px;line-height:1.6">Pour cela : connectez-vous → <strong>Mon profil</strong> → <strong>Changer mon mot de passe</strong>.</p>
         <p style="color:#8B6554;font-size:13px;margin-top:24px;border-top:1px solid #F0E6DE;padding-top:16px">© FoodChooseApp — Plateforme de choix de repas</p>
       </div>`
-    );
-    res.status(201).json(r.rows[0]);
+    ).catch(err => console.error('Email employé:', err));
   } catch (e) {
     if (e.code==='23505') return res.status(400).json({ error: 'ID ou email déjà existant' });
     res.status(500).json({ error: e.message });
@@ -713,7 +713,7 @@ app.post('/api/admin/orders/validate', adminAuth, async (req, res) => {
       );
       await createNotification('restaurant', rid, '🛒 Nouvelle commande', `Commande de ${coName} pour le ${d}`, 'order', { companyId: req.user.companyId, date: d });
       const rest = await pool.query('SELECT email,name FROM restaurants WHERE id=$1', [rid]);
-      if (rest.rows.length) await sendMail(rest.rows[0].email, `🛒 Nouvelle commande — ${coName}`, `<div style="font-family:Georgia;padding:40px;background:#FFF8F3"><h1 style="color:#E85A2A">🍽 FoodChooseApp</h1><p><strong>${coName}</strong> a passé une commande pour le ${d}. Connectez-vous pour confirmer et envoyer la facture.</p></div>`);
+      if (rest.rows.length) sendMail(rest.rows[0].email, `🛒 Nouvelle commande — ${coName}`, `<div style="font-family:Georgia;padding:40px;background:#FFF8F3"><h1 style="color:#E85A2A">🍽 FoodChooseApp</h1><p><strong>${coName}</strong> a passé une commande pour le ${d}. Connectez-vous pour confirmer et envoyer la facture.</p></div>`).catch(err => console.error('Email commande:', err));
     }
     res.json({ validated: r.rowCount });
   } catch (e) { res.status(500).json({ error: e.message }); }

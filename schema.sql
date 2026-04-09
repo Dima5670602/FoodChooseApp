@@ -161,6 +161,16 @@ CREATE TABLE IF NOT EXISTS deletion_feedback (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS password_resets (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) NOT NULL,
+  user_type VARCHAR(20) NOT NULL,
+  otp_code VARCHAR(6) NOT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  used BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_orders_company ON orders(company_id);
 CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(order_date);
 CREATE INDEX IF NOT EXISTS idx_menus_restaurant ON menus(restaurant_id);

@@ -212,7 +212,6 @@
           <label class="btn btn-primary btn-sm" style="cursor:pointer">📷 Choisir une photo
             <input type="file" accept="image/*" id="empPhotoInput" style="display:none" onchange="handleEmpPhoto(this)">
           </label>
-          <button class="btn btn-outline btn-sm" style="margin-top:8px;display:block;margin:8px auto 0" onclick="saveEmpProfile()">💾 Enregistrer</button>
         </div>
       </div>
       <div class="card">
@@ -519,20 +518,15 @@ async function loadEmpProfile() {
 }
 
 async function handleEmpPhoto(input) {
+  if (!input.files[0]) return;
   const b64 = await readFileAsBase64(input.files[0]);
   document.getElementById('empPhotoImg').src = b64;
   document.getElementById('empPhotoImg').style.display = 'block';
   document.getElementById('empPhotoPreview').style.background = 'transparent';
-}
-
-async function saveEmpProfile() {
-  const photoUrl = document.getElementById('empPhotoImg').src;
   try {
-    await apiFetch('/api/employee/profile', { method: 'PUT', body: JSON.stringify({ photoUrl: photoUrl.startsWith('data:') ? photoUrl : null }) }, empToken);
+    await apiFetch('/api/employee/profile', { method: 'PUT', body: JSON.stringify({ photoUrl: b64 }) }, empToken);
+    document.getElementById('sidebarAvatar').innerHTML = `<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
     toast('Photo mise à jour !', 'success');
-    if (photoUrl && photoUrl.startsWith('data:')) {
-      document.getElementById('sidebarAvatar').innerHTML = `<img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover">`;
-    }
   } catch(e) { toast(e.message, 'error'); }
 }
 
