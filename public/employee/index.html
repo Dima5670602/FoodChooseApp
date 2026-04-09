@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>FoodChooseApp — Espace Employé</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <style>
+    .login-screen{position:fixed;inset:0;background:var(--brown);display:flex;align-items:center;justify-content:center;padding:20px;z-index:1000}
+    .bg-deco{position:fixed;inset:0;z-index:0;background:radial-gradient(circle at 30% 50%,rgba(232,90,42,.12),transparent 50%)}
+    .grid{position:fixed;inset:0;z-index:0;background-image:linear-gradient(rgba(255,248,243,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,248,243,.03) 1px,transparent 1px);background-size:40px 40px}
+    .auth-card{position:relative;z-index:1;background:var(--cream);border-radius:22px;padding:40px;width:100%;max-width:420px;box-shadow:0 40px 80px rgba(0,0,0,.4);animation:cardIn .6s cubic-bezier(.16,1,.3,1) both}
+    @keyframes cardIn{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+    .auth-logo{text-align:center;margin-bottom:28px}
+    .auth-logo .icon{font-size:38px;display:block;margin-bottom:8px}
+    .auth-logo h1{font-family:'Playfair Display',serif;font-size:26px;font-weight:900;color:var(--brown)}
+    .auth-logo h1 span{color:var(--orange)}
+    #loginErr{background:#FEE2E2;color:#991B1B;border-radius:10px;padding:12px 14px;font-size:13px;margin-top:10px;display:none;border:1px solid #FCA5A5}
+    #loginErr.show{display:block}
+    /* Restaurant list */
+    .rest-list{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    .rest-btn{display:flex;flex-direction:column;align-items:center;padding:18px 14px;background:var(--cream);border:2px solid var(--border);border-radius:14px;cursor:pointer;transition:all .2s;text-align:center;text-decoration:none}
+    .rest-btn:hover,.rest-btn.active{border-color:var(--orange);background:#FFF0EA;transform:translateY(-2px)}
+    /* Menu grid */
+    .menu-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    @media(max-width:700px){.rest-list{grid-template-columns:repeat(2,1fr)}.menu-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:480px){.rest-list{grid-template-columns:1fr}.menu-grid{grid-template-columns:1fr}}
+    /* History item */
+    .hist-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+    .hist-icon{width:38px;height:38px;border-radius:10px;background:var(--orange);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+  </style>
+</head>
+<body>
+<div id="toastContainer"></div>
+
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="loginScreen">
+  <div class="bg-deco"></div><div class="grid"></div>
+  <div class="auth-card">
+    <div class="auth-logo">
+      <span class="icon">👤</span>
+      <h1>Food<span>Choose</span>App</h1>
+      <p>Espace Employé</p>
+    </div>
+    <div class="form-group">
+      <label>Identifiant employé</label>
+      <input class="form-control" id="empIdInput" placeholder="EMP-001">
+    </div>
+    <div class="form-group">
+      <label>Mot de passe</label>
+      <div class="pw-wrap">
+        <input class="form-control" type="password" id="empPwdInput" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')loginEmployee()">
+        <button class="pw-toggle" type="button">👁</button>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="empLoginBtn" style="width:100%;padding:14px;margin-top:6px" onclick="loginEmployee()">Se connecter</button>
+    <div id="loginErr"></div>
+    <p style="text-align:center;margin-top:12px;font-size:13px">
+      <a href="#" style="color:var(--orange)" onclick="openForgotModal('employee')">Mot de passe oublié ?</a>
+    </p>
+    <p style="text-align:center;margin-top:8px"><a href="/" style="font-size:12.5px;color:var(--muted);text-decoration:none">← Retour à l'accueil</a></p>
+  </div>
+</div>
+
+<!-- FORGOT PASSWORD MODAL -->
+<div id="forgotModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;align-items:center;justify-content:center">
+  <div style="background:var(--cream);border-radius:18px;padding:32px;width:100%;max-width:400px;margin:20px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <h3 style="font-family:'Playfair Display',serif;color:var(--brown);margin-bottom:6px">🔑 Mot de passe oublié</h3>
+    <div id="fp-step1"><p style="font-size:13px;color:var(--muted);margin-bottom:16px">Entrez votre email pour recevoir un code OTP.</p><div class="form-group"><label>Email</label><input class="form-control" id="fp-email" type="email" placeholder="votre@email.com"></div><div id="fp-err" style="color:#dc2626;font-size:13px;margin-bottom:10px;display:none"></div><button class="btn btn-primary" style="width:100%" onclick="fpSendOtp()">📧 Envoyer le code</button></div>
+    <div id="fp-step2" style="display:none"><p style="font-size:13px;color:var(--muted);margin-bottom:16px">Entrez le code à 6 chiffres reçu par email.</p><div class="form-group"><label>Code OTP</label><input class="form-control" id="fp-otp" placeholder="000000" maxlength="6" style="letter-spacing:6px;font-size:22px;text-align:center;font-family:monospace"></div><div id="fp-err2" style="color:#dc2626;font-size:13px;margin-bottom:10px;display:none"></div><button class="btn btn-primary" style="width:100%" onclick="fpVerifyOtp()">✅ Vérifier le code</button></div>
+    <div id="fp-step3" style="display:none"><p style="font-size:13px;color:var(--muted);margin-bottom:16px">Définissez votre nouveau mot de passe.</p><div class="form-group"><label>Nouveau mot de passe</label><div class="pw-wrap"><input class="form-control" type="password" id="fp-pwd" placeholder="Minimum 6 caractères"><button class="pw-toggle" type="button">👁</button></div></div><div class="form-group"><label>Confirmer</label><div class="pw-wrap"><input class="form-control" type="password" id="fp-pwd2" placeholder="Répétez"><button class="pw-toggle" type="button">👁</button></div></div><div id="fp-err3" style="color:#dc2626;font-size:13px;margin-bottom:10px;display:none"></div><button class="btn btn-primary" style="width:100%" onclick="fpResetPassword()">🔐 Changer le mot de passe</button></div>
+    <button onclick="closeForgotModal()" style="width:100%;margin-top:12px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px">Annuler</button>
+  </div>
+</div>
+
+<!-- MAIN APP (hidden until login) -->
+<div id="appScreen" style="display:none">
+<div class="app-layout">
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">👤</span>
+    <div class="logo-name">Food<span>Choose</span></div>
+    <span class="logo-badge">Employé</span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">Mon repas</div>
+    <div class="nav-item active" data-page="meal"><span class="icon">🍽</span><span>Choisir mon repas</span></div>
+    <div class="nav-section">Mon compte</div>
+    <div class="nav-item" data-page="history"><span class="icon">📋</span><span>Mon historique</span></div>
+    <div class="nav-item" data-page="ratings"><span class="icon">⭐</span><span>Mes notes</span></div>
+    <div class="nav-item" data-page="profile"><span class="icon">⚙️</span><span>Mon profil</span></div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-card">
+      <div class="user-avatar" id="sidebarAvatar">👤</div>
+      <div><div class="user-name" id="sidebarName">—</div><div class="user-role" id="sidebarId">—</div></div>
+    </div>
+    <button class="btn-logout" onclick="logoutEmp()">🚪 Déconnexion</button>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="hamburger" id="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+      <div class="topbar-title" id="pageTitle">Choisir mon repas</div>
+    </div>
+    <div class="topbar-right">
+      <span id="topDate" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+  </div>
+
+  <div class="content">
+
+  <!-- ═══ MEAL CHOICE ═══ -->
+  <div class="page active" id="page-meal">
+    <!-- Today's order banner -->
+    <div id="todayBanner" style="display:none" class="order-banner">
+      <div>
+        <div class="ob-title">🎉 Commande du jour</div>
+        <div class="ob-menu" id="obMenu">—</div>
+        <div class="ob-meta" id="obMeta">—</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" style="background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4);color:white" onclick="cancelTodayOrder()">🗑 Annuler</button>
+        <button class="btn btn-outline btn-sm" style="background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4);color:white" onclick="rateCurrentOrder()">⭐ Noter</button>
+      </div>
+    </div>
+
+    <!-- Restaurant selection -->
+    <div id="restaurantSelectionView">
+      <div class="card">
+        <div class="card-header"><span class="card-title">🍽 Restaurants disponibles</span></div>
+        <div class="card-body">
+          <div class="rest-list" id="restList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Menu selection -->
+    <div id="menuSelectionView" style="display:none">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+        <button class="btn btn-outline btn-sm" onclick="backToRestaurants()">← Restaurants</button>
+        <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--brown)" id="selectedRestName">—</div>
+      </div>
+      <div class="menu-grid" id="menuGrid"></div>
+
+      <!-- Drink preference -->
+      <div class="card" style="margin-top:18px">
+        <div class="card-header"><span class="card-title">🥤 Préférence boisson</span></div>
+        <div class="card-body" style="display:flex;gap:14px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+            <input type="radio" name="drink" value="lipton" id="drinkLipton" style="accent-color:var(--orange);width:16px;height:16px">🍵 Lipton
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+            <input type="radio" name="drink" value="cafeine" id="drinkCafeine" style="accent-color:var(--orange);width:16px;height:16px">☕ Caféine
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+            <input type="radio" name="drink" value="both" id="drinkBoth" style="accent-color:var(--orange);width:16px;height:16px">🍵☕ Les deux
+          </label>
+        </div>
+      </div>
+
+      <div id="selectedMenuPreview" style="display:none;margin-top:14px" class="card">
+        <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Menu sélectionné</div>
+            <div style="font-size:16px;font-weight:700;color:var(--brown);margin-top:3px" id="previewMenuName">—</div>
+            <div style="font-size:13px;color:var(--orange)" id="previewMenuPrice">—</div>
+          </div>
+          <button class="btn btn-primary" style="padding:12px 24px" onclick="confirmOrder()">✅ Valider ma commande</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ HISTORY ═══ -->
+  <div class="page" id="page-history">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Mon historique</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline btn-sm" onclick="loadEmpHistory()">🔄</button>
+          <button class="btn btn-danger btn-sm" onclick="clearHistory()">🗑 Tout vider</button>
+        </div>
+      </div>
+      <div class="card-body" id="historyList"></div>
+    </div>
+  </div>
+
+  <!-- ═══ RATINGS ═══ -->
+  <div class="page" id="page-ratings">
+    <div class="card">
+      <div class="card-header"><span class="card-title">⭐ Mes notes de plats</span></div>
+      <div class="card-body" id="ratingsList">
+        <div class="empty-state"><span class="icon">⭐</span>Utilisez le bouton "Noter" après avoir commandé</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PROFILE ═══ -->
+  <div class="page" id="page-profile">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Ma photo de profil</span></div>
+        <div class="card-body" style="text-align:center">
+          <div class="photo-preview" id="empPhotoPreview" style="width:100px;height:100px;font-size:40px;margin:0 auto 14px">
+            <img id="empPhotoImg" src="" style="display:none">
+          </div>
+          <label class="btn btn-primary btn-sm" style="cursor:pointer">📷 Choisir une photo
+            <input type="file" accept="image/*" id="empPhotoInput" style="display:none" onchange="handleEmpPhoto(this)">
+          </label>
+          <button class="btn btn-outline btn-sm" style="margin-top:8px;display:block;margin:8px auto 0" onclick="saveEmpProfile()">💾 Enregistrer</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Changer mon mot de passe</span></div>
+        <div class="card-body">
+          <div id="profileInfo" style="margin-bottom:14px;padding:12px;background:#F9F1EB;border-radius:10px;font-size:13px"></div>
+          <div class="form-group">
+            <label>Nouveau mot de passe</label>
+            <div class="pw-wrap">
+              <input class="form-control" type="password" id="newPwd" placeholder="Nouveau mot de passe">
+              <button class="pw-toggle" type="button">👁</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Confirmer</label>
+            <div class="pw-wrap">
+              <input class="form-control" type="password" id="newPwd2" placeholder="Confirmer">
+              <button class="pw-toggle" type="button">👁</button>
+            </div>
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="changePassword()">🔐 Changer le mot de passe</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /content -->
+</main>
+</div>
+</div>
+
+<!-- RATE MODAL -->
+<div class="modal-overlay" id="rateModal">
+  <div class="modal">
+    <div class="modal-title">⭐ Noter votre repas</div>
+    <div style="margin-bottom:14px;font-size:13px;color:var(--muted)" id="rateMenuName">—</div>
+    <div style="margin-bottom:18px">
+      <div style="font-size:13px;font-weight:600;color:var(--brown);margin-bottom:10px">Votre note :</div>
+      <div class="star-rating" id="starRating">
+        <span class="star" data-v="1" onclick="setRating(1)">☆</span>
+        <span class="star" data-v="2" onclick="setRating(2)">☆</span>
+        <span class="star" data-v="3" onclick="setRating(3)">☆</span>
+        <span class="star" data-v="4" onclick="setRating(4)">☆</span>
+        <span class="star" data-v="5" onclick="setRating(5)">☆</span>
+      </div>
+      <div id="ratingLabel" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
+    </div>
+    <div class="form-group">
+      <label>Commentaire (optionnel)</label>
+      <textarea class="form-control" id="rateComment" rows="2" placeholder="Votre avis..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="document.getElementById('rateModal').classList.remove('open')">Annuler</button>
+      <button class="btn btn-primary" onclick="submitRating()">⭐ Envoyer ma note</button>
+    </div>
+  </div>
+</div>
+
+<script src="/assets/js/utils.js"></script>
+<script>
+// ── Auth ──────────────────────────────────────────────
+let empToken = localStorage.getItem('fc_token');
+let empData = null;
+let selectedMenuId = null;
+let selectedMenuData = null;
+let selectedRestId = null;
+let currentRateOrder = null;
+let currentRating = 0;
+
+initPasswordToggles();
+document.getElementById('topDate').textContent = new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'});
+
+// ── Mot de passe oublié (employé) ─────────────────────
+let _fpType = 'employee';
+function openForgotModal(type) { _fpType=type; ['fp-step1','fp-step2','fp-step3'].forEach((id,i)=>document.getElementById(id).style.display=i===0?'block':'none'); ['fp-err','fp-err2','fp-err3'].forEach(id=>{const el=document.getElementById(id);el.style.display='none';el.textContent='';}); document.getElementById('fp-email').value=''; document.getElementById('fp-otp').value=''; document.getElementById('fp-pwd').value=''; document.getElementById('fp-pwd2').value=''; const m=document.getElementById('forgotModal'); m.style.display='flex'; initPasswordToggles(); }
+function closeForgotModal() { document.getElementById('forgotModal').style.display='none'; }
+async function fpSendOtp() { const email=document.getElementById('fp-email').value.trim(); const errEl=document.getElementById('fp-err'); errEl.style.display='none'; if(!email){errEl.textContent='Email requis';errEl.style.display='block';return;} try{ await apiFetch('/api/auth/forgot-password',{method:'POST',body:JSON.stringify({email,userType:_fpType})}); document.getElementById('fp-step1').style.display='none'; document.getElementById('fp-step2').style.display='block'; toast('Code envoyé !','success'); }catch(e){errEl.textContent=e.message;errEl.style.display='block';} }
+async function fpVerifyOtp() { const email=document.getElementById('fp-email').value.trim(); const otp=document.getElementById('fp-otp').value.trim(); const errEl=document.getElementById('fp-err2'); errEl.style.display='none'; if(otp.length!==6){errEl.textContent='Code à 6 chiffres requis';errEl.style.display='block';return;} try{ await apiFetch('/api/auth/verify-otp',{method:'POST',body:JSON.stringify({email,userType:_fpType,otp})}); document.getElementById('fp-step2').style.display='none'; document.getElementById('fp-step3').style.display='block'; }catch(e){errEl.textContent=e.message;errEl.style.display='block';} }
+async function fpResetPassword() { const email=document.getElementById('fp-email').value.trim(); const otp=document.getElementById('fp-otp').value.trim(); const pwd=document.getElementById('fp-pwd').value; const pwd2=document.getElementById('fp-pwd2').value; const errEl=document.getElementById('fp-err3'); errEl.style.display='none'; if(pwd!==pwd2){errEl.textContent='Les mots de passe ne correspondent pas';errEl.style.display='block';return;} if(pwd.length<6){errEl.textContent='Minimum 6 caractères';errEl.style.display='block';return;} try{ await apiFetch('/api/auth/reset-password',{method:'POST',body:JSON.stringify({email,userType:_fpType,otp,newPassword:pwd})}); toast('Mot de passe changé ! Connectez-vous.','success'); closeForgotModal(); }catch(e){errEl.textContent=e.message;errEl.style.display='block';} }
+
+if (empToken && localStorage.getItem('fc_role') === 'employee') {
+  showApp();
+}
+
+async function loginEmployee() {
+  const empId = document.getElementById('empIdInput').value.trim();
+  const pwd = document.getElementById('empPwdInput').value;
+  const err = document.getElementById('loginErr');
+  err.classList.remove('show');
+  if (!empId || !pwd) { err.textContent = 'Tous les champs sont requis'; err.classList.add('show'); return; }
+  const btn = document.getElementById('empLoginBtn');
+  btn.disabled = true; btn.textContent = '⏳ Connexion...';
+  try {
+    const data = await apiFetch('/api/auth/employee/login', { method: 'POST', body: JSON.stringify({ employeeId: empId, password: pwd }) });
+    localStorage.setItem('fc_token', data.token);
+    localStorage.setItem('fc_role', 'employee');
+    localStorage.setItem('fc_name', data.name);
+    localStorage.setItem('fc_id', data.companyId);
+    empToken = data.token;
+    showApp();
+  } catch(e) {
+    err.textContent = e.message; err.classList.add('show');
+  } finally { btn.disabled = false; btn.textContent = 'Se connecter'; }
+}
+
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'block';
+  const name = localStorage.getItem('fc_name') || '—';
+  document.getElementById('sidebarName').textContent = name;
+  initSidebar();
+  initNav(null, (page) => {
+    if (page === 'meal') initMealPage();
+    else if (page === 'history') loadEmpHistory();
+    else if (page === 'profile') loadEmpProfile();
+    else if (page === 'ratings') loadRatingsPage();
+  });
+  initMealPage();
+}
+
+function logoutEmp() { localStorage.clear(); window.location.reload(); }
+
+// ── Meal page ─────────────────────────────────────────
+async function initMealPage() {
+  // Check today's order
+  try {
+    const orders = await apiFetch('/api/employee/order', {}, empToken);
+    const banner = document.getElementById('todayBanner');
+    if (orders && orders.length > 0) {
+      const o = orders[0];
+      banner.style.display = 'flex';
+      document.getElementById('obMenu').textContent = `${o.menu_name} @ ${o.restaurant_name}`;
+      document.getElementById('obMeta').textContent = `${DRINK_LABELS[o.drink_preference]||''} — Statut : ${o.status}`;
+      window._todayOrderId = o.id;
+      window._todayMenuId = o.menu_id;
+      window._todayRestId = o.restaurant_id;
+    } else { banner.style.display = 'none'; }
+  } catch(e) { document.getElementById('todayBanner').style.display = 'none'; }
+  // Load restaurants
+  loadRestaurants();
+}
+
+async function loadRestaurants() {
+  try {
+    const rests = await apiFetch('/api/employee/restaurants', {}, empToken);
+    const el = document.getElementById('restList');
+    if (!rests.length) { el.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><span class="icon">🍽</span>Aucun restaurant affilié à votre entreprise</div>'; return; }
+    el.innerHTML = rests.map(r => {
+      const sps = Array.isArray(r.specialties) ? r.specialties : JSON.parse(r.specialties||'[]');
+      return `
+        <div class="rest-btn" onclick="selectRestaurant(${r.id}, '${r.name.replace(/'/g,"\\'")}')">
+          <div class="rest-avatar" style="margin-bottom:10px;width:52px;height:52px">${r.photo_url?`<img src="${r.photo_url}">`:'🍽'}</div>
+          <div style="font-weight:700;font-size:13.5px;color:var(--brown);margin-bottom:4px">${r.name}</div>
+          <div style="font-size:11px;color:var(--muted)">${sps.slice(0,1).join('')||'Restaurant'}</div>
+          <div style="margin-top:8px;font-size:12px;color:var(--orange)">🍜 ${r.menu_count} menus</div>
+        </div>
+      `;
+    }).join('');
+  } catch(e) { toast('Erreur chargement restaurants', 'error'); }
+}
+
+async function selectRestaurant(id, name) {
+  selectedRestId = id;
+  document.getElementById('selectedRestName').textContent = name;
+  document.getElementById('restaurantSelectionView').style.display = 'none';
+  document.getElementById('menuSelectionView').style.display = 'block';
+  selectedMenuId = null;
+  document.getElementById('selectedMenuPreview').style.display = 'none';
+  // Restore previous drink preference
+  try {
+    const profile = await apiFetch('/api/employee/profile', {}, empToken);
+    if (profile.drink_preference) document.querySelector(`input[name="drink"][value="${profile.drink_preference}"]`)?.click();
+  } catch(e) {}
+  // Load menus
+  try {
+    const menus = await apiFetch(`/api/employee/restaurants/${id}/menus`, {}, empToken);
+    const grid = document.getElementById('menuGrid');
+    if (!menus.length) { grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><span class="icon">🍜</span>Aucun menu disponible ce jour</div>'; return; }
+    const byCat = {};
+    menus.forEach(m=>{ if(!byCat[m.category]) byCat[m.category]=[]; byCat[m.category].push(m); });
+    grid.innerHTML = Object.entries(byCat).map(([cat, items]) => `
+      <div style="grid-column:1/-1;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-top:6px">${CAT_ICONS[cat]||'🍽'} ${cat}</div>
+      ${items.map(m=>`
+        <div class="menu-card" id="mc-${m.id}" onclick="selectMenu(${m.id}, '${m.name.replace(/'/g,"\\'")}', ${m.price||0})">
+          <div style="font-weight:700;font-size:13.5px;color:var(--brown);margin-bottom:5px">${m.name}</div>
+          ${m.description?`<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${m.description}</div>`:''}
+          <div style="font-weight:600;color:var(--orange)">${parseFloat(m.price||0).toLocaleString()} FCFA</div>
+        </div>
+      `).join('')}
+    `).join('');
+  } catch(e) { toast('Erreur chargement menus', 'error'); }
+}
+
+function backToRestaurants() {
+  selectedMenuId = null; selectedRestId = null;
+  document.getElementById('restaurantSelectionView').style.display = 'block';
+  document.getElementById('menuSelectionView').style.display = 'none';
+}
+
+function selectMenu(id, name, price) {
+  document.querySelectorAll('.menu-card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById(`mc-${id}`)?.classList.add('selected');
+  selectedMenuId = id;
+  selectedMenuData = { id, name, price };
+  document.getElementById('previewMenuName').textContent = name;
+  document.getElementById('previewMenuPrice').textContent = `${parseFloat(price).toLocaleString()} FCFA`;
+  document.getElementById('selectedMenuPreview').style.display = 'block';
+}
+
+async function confirmOrder() {
+  if (!selectedMenuId || !selectedRestId) { toast('Sélectionnez un menu', 'error'); return; }
+  const drink = document.querySelector('input[name="drink"]:checked')?.value || null;
+  try {
+    await apiFetch('/api/employee/order', { method: 'POST', body: JSON.stringify({ menuId: selectedMenuId, restaurantId: selectedRestId, drinkPreference: drink }) }, empToken);
+    toast('Commande enregistrée !', 'success');
+    backToRestaurants();
+    initMealPage();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function cancelTodayOrder() {
+  if (!window._todayOrderId) return;
+  if (!confirm('Annuler votre commande du jour ?')) return;
+  try {
+    await apiFetch(`/api/employee/order/${window._todayOrderId}`, { method: 'DELETE' }, empToken);
+    toast('Commande annulée', 'info'); initMealPage();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function rateCurrentOrder() {
+  if (!window._todayMenuId) return;
+  currentRateOrder = { menuId: window._todayMenuId, restaurantId: window._todayRestId, date: todayStr() };
+  document.getElementById('rateMenuName').textContent = document.getElementById('obMenu').textContent;
+  openRateModal();
+}
+
+// ── History ───────────────────────────────────────────
+async function loadEmpHistory() {
+  try {
+    const hist = await apiFetch('/api/employee/history', {}, empToken);
+    const el = document.getElementById('historyList');
+    if (!hist.length) { el.innerHTML = '<div class="empty-state"><span class="icon">📋</span>Aucun historique</div>'; return; }
+    el.innerHTML = hist.map(h=>`
+      <div class="hist-item">
+        <div class="hist-icon">${h.action==='created'?'🛒':h.action==='deleted'?'🗑':'✏️'}</div>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:13.5px;color:var(--brown)">${h.menu_name||'—'}</div>
+          <div style="font-size:12px;color:var(--muted)">${h.restaurant_name||'—'} • ${DRINK_LABELS[h.drink_preference]||''}</div>
+          <div style="font-size:11px;color:var(--muted)">${formatDate(h.order_date)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="badge badge-${h.action==='created'?'validated':h.action==='deleted'?'danger':'info'}">${h.action}</span>
+          <button class="btn btn-outline btn-sm" onclick="delHistItem(${h.id})">🗑</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {}
+}
+
+async function delHistItem(id) {
+  await apiFetch(`/api/employee/history/${id}`, { method: 'DELETE' }, empToken);
+  loadEmpHistory();
+}
+
+async function clearHistory() {
+  if (!confirm('Vider tout l\'historique ?')) return;
+  await apiFetch('/api/employee/history', { method: 'DELETE' }, empToken);
+  toast('Historique vidé', 'info'); loadEmpHistory();
+}
+
+// ── Ratings page ──────────────────────────────────────
+async function loadRatingsPage() {
+  const el = document.getElementById('ratingsList');
+  el.innerHTML = `
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Pour noter un plat, cliquez sur <strong>"⭐ Noter"</strong> après avoir passé votre commande du jour.</p>
+    <button class="btn btn-primary" onclick="rateCurrentOrder()">⭐ Noter mon repas du jour</button>
+  `;
+}
+
+// ── Profile ───────────────────────────────────────────
+async function loadEmpProfile() {
+  try {
+    const p = await apiFetch('/api/employee/profile', {}, empToken);
+    if (p.photo_url) {
+      document.getElementById('empPhotoImg').src = p.photo_url;
+      document.getElementById('empPhotoImg').style.display = 'block';
+      document.getElementById('empPhotoPreview').style.background = 'transparent';
+      document.getElementById('sidebarAvatar').innerHTML = `<img src="${p.photo_url}" style="width:100%;height:100%;object-fit:cover">`;
+    }
+    document.getElementById('profileInfo').innerHTML = `
+      <div>👤 <strong>${p.first_name} ${p.last_name}</strong></div>
+      <div style="margin-top:4px">🪪 ID: <strong>${p.employee_id}</strong></div>
+      <div style="margin-top:4px">📧 ${p.email}</div>
+    `;
+    if (p.photo_url) {
+      const img = document.getElementById('empPhotoImg');
+      img.src = p.photo_url; img.style.display = 'block';
+      document.getElementById('empPhotoPreview').style.background = 'transparent';
+    }
+    const av = document.getElementById('sidebarAvatar');
+    if (p.photo_url) { av.innerHTML = `<img src="${p.photo_url}" style="width:100%;height:100%;object-fit:cover;border-radius:9px">`; }
+    initPasswordToggles();
+  } catch(e) {}
+}
+
+async function handleEmpPhoto(input) {
+  const b64 = await readFileAsBase64(input.files[0]);
+  document.getElementById('empPhotoImg').src = b64;
+  document.getElementById('empPhotoImg').style.display = 'block';
+  document.getElementById('empPhotoPreview').style.background = 'transparent';
+}
+
+async function saveEmpProfile() {
+  const photoUrl = document.getElementById('empPhotoImg').src;
+  try {
+    await apiFetch('/api/employee/profile', { method: 'PUT', body: JSON.stringify({ photoUrl: photoUrl.startsWith('data:') ? photoUrl : null }) }, empToken);
+    toast('Photo mise à jour !', 'success');
+    if (photoUrl && photoUrl.startsWith('data:')) {
+      document.getElementById('sidebarAvatar').innerHTML = `<img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover">`;
+    }
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function changePassword() {
+  const pwd = document.getElementById('newPwd').value;
+  const pwd2 = document.getElementById('newPwd2').value;
+  if (!pwd) { toast('Entrez un nouveau mot de passe', 'error'); return; }
+  if (pwd !== pwd2) { toast('Les mots de passe ne correspondent pas', 'error'); return; }
+  if (pwd.length < 6) { toast('Minimum 6 caractères', 'error'); return; }
+  try {
+    await apiFetch('/api/employee/profile', { method: 'PUT', body: JSON.stringify({ newPassword: pwd }) }, empToken);
+    toast('Mot de passe changé !', 'success');
+    document.getElementById('newPwd').value = ''; document.getElementById('newPwd2').value = '';
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Rating modal ──────────────────────────────────────
+const ratingLabels = ['', 'Pas terrible 😕', 'Assez bon 🙂', 'Bon 😊', 'Délicieux 😋', 'Exquis 🤩'];
+function openRateModal() {
+  currentRating = 0;
+  document.getElementById('rateComment').value = '';
+  document.getElementById('ratingLabel').textContent = '';
+  document.querySelectorAll('.star').forEach(s=>s.textContent='☆');
+  document.getElementById('rateModal').classList.add('open');
+}
+
+function setRating(val) {
+  currentRating = val;
+  document.querySelectorAll('.star').forEach(s => {
+    s.textContent = parseInt(s.dataset.v) <= val ? '⭐' : '☆';
+  });
+  document.getElementById('ratingLabel').textContent = ratingLabels[val] || '';
+}
+
+async function submitRating() {
+  if (!currentRating) { toast('Choisissez une note', 'error'); return; }
+  if (!currentRateOrder) { toast('Aucun repas à noter', 'error'); return; }
+  try {
+    await apiFetch('/api/employee/ratings', { method: 'POST', body: JSON.stringify({ menuId: currentRateOrder.menuId, restaurantId: currentRateOrder.restaurantId, score: currentRating, comment: document.getElementById('rateComment').value, orderDate: currentRateOrder.date }) }, empToken);
+    toast(`Note de ${currentRating} étoile(s) envoyée !`, 'success');
+    document.getElementById('rateModal').classList.remove('open');
+  } catch(e) { toast(e.message, 'error'); }
+}
+</script>
+</body>
+</html>

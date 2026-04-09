@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>FoodChooseApp — Espace Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+<div id="toastContainer"></div>
+<div class="app-layout">
+
+<!-- SIDEBAR -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">🏢</span>
+    <div class="logo-name">Food<span>Choose</span></div>
+    <span class="logo-badge" id="roleLabel">Admin</span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">Tableau de bord</div>
+    <div class="nav-item active" data-page="dashboard"><span class="icon">📊</span><span>Vue d'ensemble</span></div>
+    <div class="nav-item" data-page="messages"><span class="icon">💬</span><span>Messages</span><span class="nav-badge" id="msgBadge" style="display:none">0</span></div>
+    <div class="nav-section">Restaurants</div>
+    <div class="nav-item" data-page="allrestaurants"><span class="icon">🍽</span><span>Tous les restaurants</span></div>
+    <div class="nav-item" data-page="affiliations"><span class="icon">🤝</span><span>Mes affiliations</span></div>
+    <div class="nav-section">Commandes</div>
+    <div class="nav-item" data-page="orders"><span class="icon">🛒</span><span>Commandes du jour</span></div>
+    <div class="nav-item" data-page="validate"><span class="icon">✅</span><span>Valider & Exporter</span></div>
+    <div class="nav-item" data-page="invoices"><span class="icon">🧾</span><span>Factures</span></div>
+    <div class="nav-section">Gestion</div>
+    <div class="nav-item" data-page="employees"><span class="icon">👥</span><span>Employés</span></div>
+    <div class="nav-item" data-page="expenses"><span class="icon">💰</span><span>Dépenses</span></div>
+    <div class="nav-item" data-page="history"><span class="icon">📋</span><span>Historique</span></div>
+    <div class="nav-section">Compte</div>
+    <div class="nav-item" data-page="settings"><span class="icon">⚙️</span><span>Paramètres</span></div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-card">
+      <div class="user-avatar" id="sidebarAvatar">👔</div>
+      <div><div class="user-name" id="sidebarName">—</div><div class="user-role" id="sidebarRole">Chargé de commande</div></div>
+    </div>
+    <button class="btn-logout" onclick="logout()">🚪 Déconnexion</button>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="hamburger" id="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+      <div class="topbar-title" id="pageTitle">Vue d'ensemble</div>
+    </div>
+    <div class="topbar-right">
+      <span style="font-size:12px;color:var(--muted)" id="topbarDate"></span>
+      <div style="position:relative">
+        <button class="notif-btn" onclick="toggleNotifDropdown()">🔔<span class="notif-count" id="notifCount" style="display:none">0</span></button>
+        <div class="notif-dropdown" id="notifDropdown"></div>
+      </div>
+    </div>
+  </div>
+  <div class="content">
+
+  <!-- ═══ DASHBOARD ═══ -->
+  <div class="page active" id="page-dashboard">
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-number" id="s-emp">—</div><div class="stat-label">Employés</div></div>
+      <div class="stat-card"><div class="stat-icon">🤝</div><div class="stat-number" id="s-aff">—</div><div class="stat-label">Affiliations</div></div>
+      <div class="stat-card"><div class="stat-icon">🛒</div><div class="stat-number" id="s-today">—</div><div class="stat-label">Commandes aujourd'hui</div></div>
+      <div class="stat-card"><div class="stat-icon">⏳</div><div class="stat-number" id="s-pending">—</div><div class="stat-label">En attente validation</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+      <div class="card">
+        <div class="card-header"><span class="card-title">🤝 Restaurants affiliés</span><button class="btn btn-primary btn-sm" onclick="switchToPage('allrestaurants')">+ Affilier</button></div>
+        <div class="card-body" id="dashAffiliations"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">🧾 Dernières factures</span></div>
+        <div class="card-body" id="dashInvoices"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ALL RESTAURANTS ═══ -->
+  <div class="page" id="page-allrestaurants">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Tous les restaurants</span>
+        <input class="form-control" id="restSearch" placeholder="🔍 Rechercher..." style="width:220px;font-size:13px" oninput="filterRestaurants()">
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px" id="allRestGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ AFFILIATIONS ═══ -->
+  <div class="page" id="page-affiliations">
+    <div class="card">
+      <div class="card-header"><span class="card-title">🤝 Mes restaurants affiliés</span></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px" id="myAffGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ORDERS ═══ -->
+  <div class="page" id="page-orders">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Commandes du jour</span>
+        <div class="date-filter">
+          <input type="date" id="ordersDateFilter" onchange="loadOrders()">
+          <select class="form-control" id="restFilter" style="width:180px;font-size:13px" onchange="loadOrders()"><option value="">Tous les restaurants</option></select>
+        </div>
+      </div>
+      <div class="card-body" id="ordersBody"></div>
+    </div>
+  </div>
+
+  <!-- ═══ VALIDATE ═══ -->
+  <div class="page" id="page-validate">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">✅ Valider les commandes</span>
+        <div class="date-filter">
+          <input type="date" id="validateDate">
+          <button class="btn btn-success" onclick="validateOrders()">✅ Valider toutes</button>
+          <button class="btn btn-outline btn-sm" onclick="exportPDF()">⬇️ PDF</button>
+        </div>
+      </div>
+      <div class="card-body" id="validateBody">
+        <div class="empty-state"><span class="icon">✅</span>Sélectionnez une date et validez les commandes</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ INVOICES ═══ -->
+  <div class="page" id="page-invoices">
+    <div class="card">
+      <div class="card-header"><span class="card-title">🧾 Factures reçues</span></div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>N°</th><th>Restaurant</th><th>Date</th><th>Montant</th><th>Statut</th><th>Action</th></tr></thead>
+            <tbody id="invoicesBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ EMPLOYEES ═══ -->
+  <div class="page" id="page-employees">
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Employés enregistrés</span><button class="btn btn-outline btn-sm" onclick="loadEmployees()">🔄</button></div>
+        <div class="card-body">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Nom</th><th>Email</th><th>Inscription</th><th>Action</th></tr></thead>
+              <tbody id="empTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Créer un employé</span></div>
+        <div class="card-body">
+          <div class="form-group"><label>Prénom *</label><input class="form-control" id="newEmpFn" placeholder="Prénom" oninput="autoGenerateId()"></div>
+          <div class="form-group"><label>Nom *</label><input class="form-control" id="newEmpLn" placeholder="Nom de famille" oninput="autoGenerateId()"></div>
+          <div class="form-group">
+            <label>Identifiant employé *</label>
+            <input class="form-control" id="newEmpId" placeholder="Auto-généré" oninput="idManuallyEdited=true">
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">✏️ Modifiable — généré automatiquement depuis le prénom et nom</div>
+          </div>
+          <div class="form-group"><label>Email *</label><input class="form-control" id="newEmpEmail" type="email" placeholder="employe@email.com"></div>
+          <div style="background:#FFF0EA;border-radius:8px;padding:10px;font-size:12px;color:var(--muted);margin-bottom:12px">
+            🔑 Un mot de passe provisoire sera envoyé à l'employé par email.
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="createEmployee()">➕ Créer l'employé</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ EXPENSES ═══ -->
+  <div class="page" id="page-expenses">
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-icon">📅</div><div class="stat-number" id="expW">—</div><div class="stat-label">Dépenses semaine (FCFA)</div></div>
+      <div class="stat-card"><div class="stat-icon">📆</div><div class="stat-number" id="expM">—</div><div class="stat-label">Dépenses mois (FCFA)</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Évolution des dépenses</span>
+        <select id="expPeriod" class="form-control" style="width:160px;font-size:13px" onchange="loadExpenses()">
+          <option value="week">Cette semaine</option>
+          <option value="month">Ce mois</option>
+          <option value="quarter">Ce trimestre</option>
+        </select>
+      </div>
+      <div class="card-body">
+        <div class="bar-chart" id="expChart" style="height:150px"></div>
+        <div class="table-wrap" style="margin-top:18px">
+          <table><thead><tr><th>Période</th><th>Commandes</th><th>Montant total</th></tr></thead>
+          <tbody id="expTable"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ HISTORY ═══ -->
+  <div class="page" id="page-history">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📋 Historique des consommations</span>
+        <div class="date-filter">
+          <input type="date" id="histFrom" placeholder="Du">
+          <span style="color:var(--muted);font-size:13px">au</span>
+          <input type="date" id="histTo" placeholder="Au">
+          <input class="form-control" id="histEmpId" placeholder="ID employé" style="width:130px;font-size:13px">
+          <button class="btn btn-primary btn-sm" onclick="loadHistory()">🔍 Rechercher</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Employé</th><th>Restaurant</th><th>Menu</th><th>Boisson</th><th>Action</th></tr></thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ MESSAGES ═══ -->
+  <div class="page" id="page-messages">
+    <div class="chat-layout">
+      <div class="chat-sidebar" id="adminChatSidebar">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:600;font-size:13px;color:var(--brown)">Conversations</div>
+        <div id="adminConvList"></div>
+      </div>
+      <div class="chat-main" id="adminChatMain">
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted)">
+          <div style="text-align:center"><div style="font-size:36px;margin-bottom:10px">💬</div>Sélectionnez un restaurant</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SETTINGS ═══ -->
+  <div class="page" id="page-settings">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;max-width:800px">
+      <div class="card">
+        <div class="card-header"><span class="card-title">🖼 Photo / Logo</span></div>
+        <div class="card-body" style="text-align:center">
+          <div class="user-avatar" id="settingsPhotoPreview" style="width:90px;height:90px;font-size:36px;margin:0 auto 14px;border-radius:14px">🏢</div>
+          <label class="btn btn-primary btn-sm" style="cursor:pointer">📷 Choisir
+            <input type="file" accept="image/*" id="settingsPhotoInput" style="display:none" onchange="handleSettingsPhoto(this)">
+          </label>
+          <button class="btn btn-outline btn-sm" style="margin-top:8px;display:block;margin:8px auto 0" onclick="saveCompanyPhoto()">💾 Enregistrer</button>
+        </div>
+      </div>
+      <div id="pwCardCompany" class="card">
+        <div class="card-header"><span class="card-title">🔐 Changer le mot de passe</span></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label id="coPwLabel">Mot de passe actuel</label>
+            <div class="pw-wrap">
+              <input class="form-control" type="password" id="coPwCurrent" placeholder="Mot de passe actuel">
+              <button class="pw-toggle" type="button">👁</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Nouveau mot de passe</label>
+            <div class="pw-wrap">
+              <input class="form-control" type="password" id="coPwNew" placeholder="Minimum 6 caractères">
+              <button class="pw-toggle" type="button">👁</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Confirmer</label>
+            <div class="pw-wrap">
+              <input class="form-control" type="password" id="coPwNew2" placeholder="Répétez le nouveau mot de passe">
+              <button class="pw-toggle" type="button">👁</button>
+            </div>
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="changeCompanyPassword()">🔐 Mettre à jour</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /content -->
+</main>
+</div>
+
+<!-- RESTAURANT DETAIL MODAL -->
+<div class="modal-overlay" id="restDetailModal">
+  <div class="modal" style="max-width:620px">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+      <div class="user-avatar" style="width:52px;height:52px;font-size:22px;border-radius:14px" id="rdPhoto">🍽</div>
+      <div>
+        <div class="modal-title" style="margin-bottom:0" id="rdName">Restaurant</div>
+        <div style="font-size:12px;color:var(--muted)" id="rdAddress">—</div>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Spécialités</div>
+      <div id="rdSpecialties" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Menus disponibles</div>
+      <div id="rdMenus" style="max-height:280px;overflow-y:auto"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="document.getElementById('restDetailModal').classList.remove('open')">Fermer</button>
+      <button class="btn btn-primary" id="rdAffBtn" onclick="toggleAffiliation()">🤝 S'affilier</button>
+    </div>
+  </div>
+</div>
+
+<script src="/assets/js/utils.js"></script>
+<script>
+const token = localStorage.getItem('fc_token');
+const role = localStorage.getItem('fc_role');
+if (!token || !['admin','company'].includes(role)) window.location.href = '/company/login';
+
+const adminName = localStorage.getItem('fc_name') || '—';
+document.getElementById('sidebarName').textContent = adminName.substring(0,22);
+document.getElementById('sidebarRole').textContent = role === 'admin' ? 'Chargé de commande' : 'Entreprise';
+document.getElementById('roleLabel').textContent = role === 'admin' ? 'Admin' : 'Entreprise';
+document.getElementById('topbarDate').textContent = new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+
+let allRestaurants = [];
+let currentDetailRestId = null;
+let currentDetailAffiliated = false;
+let currentChatRestId = null;
+let msgInterval = null;
+
+function logout() { localStorage.clear(); window.location.href = '/'; }
+function switchToPage(page) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const navItem = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (navItem) navItem.classList.add('active');
+  const pg = document.getElementById(`page-${page}`);
+  if (pg) pg.classList.add('active');
+}
+
+initSidebar();
+initPasswordToggles();
+initNav(null, (page) => {
+  if (page === 'dashboard') loadDashboard();
+  else if (page === 'allrestaurants') loadAllRestaurants();
+  else if (page === 'affiliations') loadAffiliations();
+  else if (page === 'orders') { document.getElementById('ordersDateFilter').value = todayStr(); loadOrders(); }
+  else if (page === 'validate') { document.getElementById('validateDate').value = todayStr(); previewValidate(); }
+  else if (page === 'invoices') loadInvoices();
+  else if (page === 'employees') loadEmployees();
+  else if (page === 'expenses') loadExpenses();
+  else if (page === 'history') {}
+  else if (page === 'messages') { loadAdminConversations(); startMsgPolling(); }
+  else if (page === 'settings') loadSettings();
+});
+initNotifications();
+loadDashboard();
+
+// ── Dashboard ─────────────────────────────────────────
+async function loadDashboard() {
+  try {
+    const s = await apiFetch('/api/admin/stats', {}, token);
+    document.getElementById('s-emp').textContent = s.employees;
+    document.getElementById('s-aff').textContent = s.affiliations;
+    document.getElementById('s-today').textContent = s.todayOrders;
+    document.getElementById('s-pending').textContent = s.pendingOrders;
+    // Affiliated restaurants
+    const affs = await apiFetch('/api/admin/affiliations', {}, token);
+    const dashAff = document.getElementById('dashAffiliations');
+    dashAff.innerHTML = affs.length ? affs.map(r => `
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div class="user-avatar" style="width:34px;height:34px;font-size:14px;border-radius:9px">${r.photo_url?`<img src="${r.photo_url}">`:'🍽'}</div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--brown)">${r.name}</div><div style="font-size:11px;color:var(--muted)">${r.menu_count} menus disponibles</div></div>
+      </div>
+    `).join('') : '<div class="empty-state"><span class="icon">🤝</span>Aucune affiliation</div>';
+    // Recent invoices
+    const invs = await apiFetch('/api/admin/invoices', {}, token);
+    const dashInv = document.getElementById('dashInvoices');
+    dashInv.innerHTML = invs.length ? invs.slice(0,5).map(inv => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <div><div style="font-weight:600;color:var(--brown)">${inv.restaurant_name}</div><div style="font-size:11px;color:var(--muted)">${formatDate(inv.created_at)}</div></div>
+        <div style="font-weight:700;color:var(--orange)">${parseFloat(inv.total_amount||0).toLocaleString()} FCFA</div>
+      </div>
+    `).join('') : '<div class="empty-state"><span class="icon">🧾</span>Aucune facture</div>';
+  } catch(e) { console.error(e); }
+}
+
+// ── All Restaurants ───────────────────────────────────
+async function loadAllRestaurants() {
+  try {
+    allRestaurants = await apiFetch('/api/admin/all-restaurants', {}, token);
+    renderRestGrid('allRestGrid', allRestaurants);
+    // Fill restaurant filter
+    const sel = document.getElementById('restFilter');
+    sel.innerHTML = '<option value="">Tous les restaurants</option>' + allRestaurants.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+  } catch(e) { toast('Erreur chargement restaurants', 'error'); }
+}
+
+function filterRestaurants() {
+  const q = document.getElementById('restSearch').value.toLowerCase();
+  renderRestGrid('allRestGrid', allRestaurants.filter(r => r.name.toLowerCase().includes(q)));
+}
+
+function renderRestGrid(containerId, list) {
+  const el = document.getElementById(containerId);
+  if (!list.length) { el.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><span class="icon">🍽</span>Aucun restaurant</div>'; return; }
+  el.innerHTML = list.map(r => {
+    const sps = Array.isArray(r.specialties) ? r.specialties : JSON.parse(r.specialties||'[]');
+    return `
+      <div class="rest-card ${r.affiliated?'affiliated':''}" onclick="openRestDetail(${r.id})">
+        <div class="rest-avatar">${r.photo_url?`<img src="${r.photo_url}">`:'🍽'}</div>
+        <div style="font-weight:700;font-size:13.5px;color:var(--brown);margin-bottom:4px">${r.name}</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">📍 ${r.address||r.location||'—'}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          ${sps.slice(0,2).map(s=>`<span style="background:#F0E6DE;color:var(--brown);font-size:10px;padding:2px 7px;border-radius:6px">${s}</span>`).join('')}
+          ${sps.length>2?`<span style="background:#F0E6DE;color:var(--brown);font-size:10px;padding:2px 7px;border-radius:6px">+${sps.length-2}</span>`:''}
+        </div>
+        <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;color:var(--muted)">🍜 ${r.menu_count} menus</span>
+          <span class="badge ${r.affiliated?'badge-success':'badge-pending'}" style="font-size:10px">${r.affiliated?'✓ Affilié':'Voir'}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function openRestDetail(restId) {
+  try {
+    const data = await apiFetch(`/api/admin/restaurants/${restId}/menus`, {}, token);
+    const rest = data.restaurant;
+    const menus = data.menus || [];
+    currentDetailRestId = restId;
+    const affiliated = allRestaurants.find(r=>r.id===restId)?.affiliated || false;
+    currentDetailAffiliated = affiliated;
+    document.getElementById('rdName').textContent = rest.name||'—';
+    document.getElementById('rdAddress').textContent = rest.address||'—';
+    const photo = document.getElementById('rdPhoto');
+    if (rest.photo_url) { photo.innerHTML = `<img src="${rest.photo_url}" style="width:100%;height:100%;object-fit:cover;border-radius:14px">`; } else { photo.textContent = '🍽'; }
+    const sps = Array.isArray(rest.specialties) ? rest.specialties : JSON.parse(rest.specialties||'[]');
+    document.getElementById('rdSpecialties').innerHTML = sps.map(s=>`<span style="background:#F0E6DE;color:var(--brown);font-size:12px;padding:4px 11px;border-radius:20px">${s}</span>`).join('');
+    // Menus by category
+    const byCat = {};
+    menus.forEach(m=>{ if(!byCat[m.category]) byCat[m.category]=[]; byCat[m.category].push(m); });
+    document.getElementById('rdMenus').innerHTML = Object.entries(byCat).map(([cat,items])=>`
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">${CAT_ICONS[cat]||'🍽'} ${cat}</div>
+        ${items.map(m=>`<div style="display:flex;justify-content:space-between;padding:8px 10px;background:white;border-radius:9px;margin-bottom:4px;font-size:13px;border:1px solid var(--border)"><span style="color:var(--brown);font-weight:500">${m.name}</span><span style="color:var(--orange);font-weight:600">${parseFloat(m.price||0).toLocaleString()} FCFA</span></div>`).join('')}
+      </div>
+    `).join('') || '<div class="empty-state" style="padding:14px">Aucun menu disponible</div>';
+    const btn = document.getElementById('rdAffBtn');
+    btn.textContent = affiliated ? '❌ Se désaffilier' : '🤝 S\'affilier';
+    btn.className = `btn ${affiliated?'btn-danger':'btn-primary'}`;
+    document.getElementById('restDetailModal').classList.add('open');
+  } catch(e) { toast('Erreur chargement restaurant', 'error'); }
+}
+
+async function toggleAffiliation() {
+  if (!currentDetailRestId) return;
+  try {
+    if (currentDetailAffiliated) {
+      await apiFetch(`/api/admin/affiliations/${currentDetailRestId}`, { method: 'DELETE' }, token);
+      toast('Affiliation supprimée', 'info');
+    } else {
+      await apiFetch('/api/admin/affiliations', { method: 'POST', body: JSON.stringify({ restaurantId: currentDetailRestId }) }, token);
+      toast('Affilié avec succès !', 'success');
+    }
+    document.getElementById('restDetailModal').classList.remove('open');
+    loadAllRestaurants();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Affiliations ──────────────────────────────────────
+async function loadAffiliations() {
+  try {
+    const affs = await apiFetch('/api/admin/affiliations', {}, token);
+    const el = document.getElementById('myAffGrid');
+    if (!affs.length) { el.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><span class="icon">🤝</span>Pas encore d\'affiliations. <a href="#" onclick="switchToPage(\'allrestaurants\')" style="color:var(--orange)">Voir les restaurants</a></div>'; return; }
+    el.innerHTML = affs.map(r => {
+      const sps = Array.isArray(r.specialties) ? r.specialties : JSON.parse(r.specialties||'[]');
+      return `
+        <div class="rest-card affiliated">
+          <div class="rest-avatar">${r.photo_url?`<img src="${r.photo_url}">`:'🍽'}</div>
+          <div style="font-weight:700;font-size:13.5px;color:var(--brown);margin-bottom:4px">${r.name}</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${sps.slice(0,2).join(', ')||'—'}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+            <span style="font-size:11px;color:var(--muted)">🍜 ${r.menu_count} menus</span>
+            <button class="btn btn-danger btn-sm" onclick="deaffiliateRest(${r.id},'${r.name.replace(/'/g,"\\'")}')">❌ Désaffilier</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch(e) {}
+}
+
+async function deaffiliateRest(id, name) {
+  if (!confirm(`Se désaffilier de ${name} ?`)) return;
+  try {
+    await apiFetch(`/api/admin/affiliations/${id}`, { method: 'DELETE' }, token);
+    toast('Désaffilié', 'info'); loadAffiliations();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Orders ────────────────────────────────────────────
+async function loadOrders() {
+  const date = document.getElementById('ordersDateFilter').value || todayStr();
+  const restId = document.getElementById('restFilter').value;
+  try {
+    const orders = await apiFetch(`/api/admin/orders?date=${date}${restId?'&restaurantId='+restId:''}`, {}, token);
+    const el = document.getElementById('ordersBody');
+    if (!orders.length) { el.innerHTML = '<div class="empty-state"><span class="icon">🛒</span>Aucune commande pour cette date</div>'; return; }
+    // Group by restaurant
+    const byRest = {};
+    orders.forEach(o=>{ if(!byRest[o.restaurant_name]) byRest[o.restaurant_name]=[]; byRest[o.restaurant_name].push(o); });
+    el.innerHTML = Object.entries(byRest).map(([rName, ords])=>`
+      <div style="margin-bottom:16px;background:#F9F1EB;border-radius:12px;padding:14px">
+        <div style="font-weight:700;font-size:14px;color:var(--brown);margin-bottom:10px">🍽 ${rName} <span style="font-size:12px;color:var(--muted);font-weight:400">— ${ords.length} commandes</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>Employé</th><th>Menu</th><th>Prix</th><th>Boisson</th><th>Statut</th></tr></thead>
+            <tbody>
+              ${ords.map(o=>`<tr>
+                <td style="font-size:11px;color:var(--muted)">${o.employee_id}</td>
+                <td>${o.first_name} ${o.last_name}</td>
+                <td>${o.menu_name}</td>
+                <td>${parseFloat(o.price||0).toLocaleString()} FCFA</td>
+                <td>${DRINK_LABELS[o.drink_preference]||'—'}</td>
+                <td><span class="badge badge-${o.status.includes('valid')||o.status==='confirmed'?'validated':'pending'}">${o.status}</span></td>
+              </tr>`).join('')}
+              <tr style="background:rgba(232,90,42,.06)"><td colspan="3" style="font-weight:700;padding:9px">Total ${rName}</td><td colspan="3" style="font-weight:700;padding:9px">${ords.reduce((s,o)=>s+parseFloat(o.price||0),0).toLocaleString()} FCFA</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { toast('Erreur', 'error'); }
+}
+
+// ── Validate ──────────────────────────────────────────
+async function previewValidate() {
+  const date = document.getElementById('validateDate').value || todayStr();
+  try {
+    const orders = await apiFetch(`/api/admin/orders?date=${date}`, {}, token);
+    const el = document.getElementById('validateBody');
+    if (!orders.length) { el.innerHTML = '<div class="empty-state"><span class="icon">✅</span>Aucune commande pour cette date</div>'; return; }
+    const pending = orders.filter(o=>o.status==='pending').length;
+    el.innerHTML = `
+      <div style="background:#FFF0EA;border-radius:12px;padding:14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--brown)">${orders.length} commandes au total</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:3px">${pending} en attente de validation</div>
+        </div>
+        <div style="font-size:16px;font-weight:700;color:var(--orange)">${orders.reduce((s,o)=>s+parseFloat(o.price||0),0).toLocaleString()} FCFA</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Employé</th><th>Restaurant</th><th>Menu</th><th>Prix</th><th>Statut</th></tr></thead>
+          <tbody>
+            ${orders.map(o=>`<tr>
+              <td>${o.first_name} ${o.last_name}</td>
+              <td>${o.restaurant_name}</td>
+              <td>${o.menu_name}</td>
+              <td>${parseFloat(o.price||0).toLocaleString()} FCFA</td>
+              <td><span class="badge badge-${o.status.includes('valid')||o.status==='confirmed'?'validated':'pending'}">${o.status}</span></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } catch(e) { toast('Erreur', 'error'); }
+}
+
+async function validateOrders() {
+  const date = document.getElementById('validateDate').value || todayStr();
+  if (!confirm(`Valider toutes les commandes du ${formatDate(date)} ?`)) return;
+  try {
+    const r = await apiFetch('/api/admin/orders/validate', { method: 'POST', body: JSON.stringify({ date }) }, token);
+    toast(`${r.validated} commandes validées ! Les restaurants ont été notifiés.`, 'success');
+    previewValidate();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function exportPDF() {
+  const date = document.getElementById('validateDate').value || todayStr();
+  fetch(`/api/admin/export-pdf?date=${date}`, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r=>r.blob()).then(blob=>{ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`commandes_${date}.pdf`; a.click(); URL.revokeObjectURL(url); })
+    .catch(()=>toast('Erreur PDF','error'));
+}
+
+// ── Invoices ──────────────────────────────────────────
+async function loadInvoices() {
+  try {
+    const invs = await apiFetch('/api/admin/invoices', {}, token);
+    const tb = document.getElementById('invoicesBody');
+    if (!invs.length) { tb.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="icon">🧾</span>Aucune facture</div></td></tr>'; return; }
+    tb.innerHTML = invs.map(inv=>`<tr>
+      <td style="font-size:11px;color:var(--muted)">FAC-${String(inv.id).padStart(5,'0')}</td>
+      <td><strong>${inv.restaurant_name}</strong></td>
+      <td>${formatDate(inv.created_at)}</td>
+      <td style="font-weight:700;color:var(--orange)">${parseFloat(inv.total_amount||0).toLocaleString()} FCFA</td>
+      <td><span class="badge badge-${inv.status==='paid'?'validated':'pending'}">${inv.status}</span></td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="downloadInvoice(${inv.id})">⬇️ PDF</button>
+        <button class="btn btn-primary btn-sm" onclick="printInvoice(${inv.id})">🖨️</button>
+      </td>
+    </tr>`).join('');
+  } catch(e) {}
+}
+
+function downloadInvoice(id) {
+  fetch(`/api/admin/invoices/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r=>r.blob()).then(blob=>{ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`facture_${id}.pdf`; a.click(); URL.revokeObjectURL(url); })
+    .catch(()=>toast('Erreur','error'));
+}
+
+function printInvoice(id) {
+  fetch(`/api/admin/invoices/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r=>r.blob()).then(blob=>{ const url=URL.createObjectURL(blob); const w=window.open(url); w.onload=()=>w.print(); });
+}
+
+// ── Employees ─────────────────────────────────────────
+async function loadEmployees() {
+  try {
+    const emps = await apiFetch('/api/admin/employees', {}, token);
+    empCounter = emps.length + 1;
+    const tb = document.getElementById('empTableBody');
+    if (!emps.length) { tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><span class="icon">👥</span>Aucun employé</div></td></tr>'; return; }
+    tb.innerHTML = emps.map(e=>`<tr>
+      <td><span style="background:#F0E6DE;color:var(--brown);padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600">${e.employee_id}</span></td>
+      <td><div style="display:flex;align-items:center;gap:8px">
+        ${e.photo_url?`<img src="${e.photo_url}" style="width:28px;height:28px;border-radius:50%;object-fit:cover">`:`<div style="width:28px;height:28px;border-radius:50%;background:var(--orange);display:flex;align-items:center;justify-content:center;font-size:11px;color:white;font-weight:700">${e.first_name[0]||'?'}</div>`}
+        <strong>${e.first_name} ${e.last_name}</strong></div></td>
+      <td style="font-size:12px;color:var(--muted)">${e.email}</td>
+      <td style="font-size:12px;color:var(--muted)">${formatDate(e.created_at)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteEmployee(${e.id},'${e.first_name}')">🗑</button></td>
+    </tr>`).join('');
+  } catch(e) {}
+}
+
+let empCounter = 1;
+let idManuallyEdited = false;
+
+function removeDiacritics(str) {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+}
+
+function autoGenerateId() {
+  if (idManuallyEdited) return;
+  const fn = removeDiacritics(document.getElementById('newEmpFn').value.trim());
+  const ln = removeDiacritics(document.getElementById('newEmpLn').value.trim());
+  if (!fn && !ln) { document.getElementById('newEmpId').value = ''; return; }
+  const initF = fn.charAt(0) || '';
+  const partL = ln.substring(0, 3) || '';
+  const num = String(empCounter).padStart(3, '0');
+  document.getElementById('newEmpId').value = `${initF}${partL}-${num}`;
+}
+
+async function createEmployee() {
+  const fn = document.getElementById('newEmpFn').value.trim();
+  const ln = document.getElementById('newEmpLn').value.trim();
+  const email = document.getElementById('newEmpEmail').value.trim();
+  const empId = document.getElementById('newEmpId').value.trim();
+  if (!fn||!ln||!email||!empId) { toast('Tous les champs sont requis', 'error'); return; }
+  try {
+    await apiFetch('/api/admin/employees', { method: 'POST', body: JSON.stringify({ firstName: fn, lastName: ln, email, employeeId: empId }) }, token);
+    toast(`Employé ${fn} créé ! Identifiants envoyés par email.`, 'success');
+    document.getElementById('newEmpFn').value=''; document.getElementById('newEmpLn').value=''; document.getElementById('newEmpEmail').value=''; document.getElementById('newEmpId').value='';
+    empCounter++;
+    idManuallyEdited = false;
+    loadEmployees();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteEmployee(id, name) {
+  if (!confirm(`Supprimer l'employé ${name} ?`)) return;
+  await apiFetch(`/api/admin/employees/${id}`, { method: 'DELETE' }, token);
+  toast('Employé supprimé', 'info'); loadEmployees();
+}
+
+// ── Expenses ──────────────────────────────────────────
+async function loadExpenses() {
+  const period = document.getElementById('expPeriod').value || 'week';
+  try {
+    const r = await apiFetch(`/api/admin/expenses?period=${period}`, {}, token);
+    // Week total quick calc
+    if (period === 'week') {
+      document.getElementById('expW').textContent = (r.totalMonth||0).toLocaleString();
+    } else if (period === 'month') {
+      document.getElementById('expM').textContent = (r.totalMonth||0).toLocaleString();
+    }
+    // Chart
+    const series = r.series || [];
+    const chart = document.getElementById('expChart');
+    if (!series.length) { chart.innerHTML = '<div style="color:var(--muted);font-size:13px;width:100%;text-align:center">Aucune donnée</div>'; }
+    else {
+      const max = Math.max(...series.map(s=>parseFloat(s.total))) || 1;
+      chart.innerHTML = series.map(s=>`
+        <div class="bar-col" title="${parseFloat(s.total).toLocaleString()} FCFA">
+          <div class="bar-fill" style="height:${Math.max(4,(parseFloat(s.total)/max)*140)}px"></div>
+          <div class="bar-label">${s.period.slice(5)}</div>
+        </div>
+      `).join('');
+    }
+    // Table
+    document.getElementById('expTable').innerHTML = series.map(s=>`
+      <tr>
+        <td>${s.period}</td>
+        <td>${s.orders}</td>
+        <td style="font-weight:600;color:var(--orange)">${parseFloat(s.total).toLocaleString()} FCFA</td>
+      </tr>
+    `).join('') || '<tr><td colspan="3" class="empty-state">Aucune donnée</td></tr>';
+    // Also load other stats
+    apiFetch('/api/admin/expenses?period=week', {}, token).then(rW=>{ document.getElementById('expW').textContent = (rW.totalMonth||0).toLocaleString(); }).catch(()=>{});
+    apiFetch('/api/admin/expenses?period=month', {}, token).then(rM=>{ document.getElementById('expM').textContent = (rM.totalMonth||0).toLocaleString(); }).catch(()=>{});
+  } catch(e) { toast('Erreur dépenses','error'); }
+}
+
+// ── History ───────────────────────────────────────────
+async function loadHistory() {
+  const from = document.getElementById('histFrom').value;
+  const to = document.getElementById('histTo').value;
+  const empId = document.getElementById('histEmpId').value.trim();
+  try {
+    let url = '/api/admin/history?';
+    if (from) url += `from=${from}&`;
+    if (to) url += `to=${to}&`;
+    if (empId) url += `employeeId=${empId}&`;
+    const r = await apiFetch(url, {}, token);
+    const tb = document.getElementById('historyBody');
+    if (!r.length) { tb.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="icon">📋</span>Aucun résultat</div></td></tr>'; return; }
+    tb.innerHTML = r.map(h=>`<tr>
+      <td>${formatDate(h.order_date)}</td>
+      <td><strong>${h.employee_name||'—'}</strong><div style="font-size:11px;color:var(--muted)">${h.employee_id||''}</div></td>
+      <td>${h.restaurant_name||'—'}</td>
+      <td>${h.menu_name||'—'}</td>
+      <td>${DRINK_LABELS[h.drink_preference]||'—'}</td>
+      <td><span class="badge ${h.action==='created'?'badge-success':h.action==='deleted'?'badge-danger':'badge-info'}">${h.action}</span></td>
+    </tr>`).join('');
+  } catch(e) { toast('Erreur historique','error'); }
+}
+
+// ── Messages ──────────────────────────────────────────
+async function loadAdminConversations() {
+  try {
+    const convs = await apiFetch('/api/admin/conversations', {}, token);
+    const el = document.getElementById('adminConvList');
+    let total = 0;
+    if (!convs.length) { el.innerHTML = '<div class="empty-state" style="padding:16px"><span class="icon">💬</span>Affiliez-vous à un restaurant pour communiquer</div>'; return; }
+    el.innerHTML = convs.map(c=>{
+      total += parseInt(c.unread||0);
+      return `<div class="chat-conv ${currentChatRestId==c.restaurant_id?'active':''}" onclick="openAdminChat(${c.restaurant_id},'${c.restaurant_name.replace(/'/g,"\\'")}','${c.photo_url||''}')">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="chat-conv-name">${c.restaurant_name}</div>
+          ${c.unread>0?`<span style="background:var(--orange);color:white;font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px">${c.unread}</span>`:''}
+        </div>
+        <div class="chat-conv-last">${c.last_message||'Pas encore de message'}</div>
+      </div>`;
+    }).join('');
+    const b = document.getElementById('msgBadge');
+    if (total > 0) { b.textContent = total; b.style.display = 'inline'; } else { b.style.display = 'none'; }
+  } catch(e) {}
+}
+
+async function openAdminChat(restId, restName, photo) {
+  currentChatRestId = restId;
+  const coId = parseInt(localStorage.getItem('fc_id'));
+  await apiFetch('/api/messages/read', { method: 'PUT', body: JSON.stringify({ companyId: coId, restaurantId: restId }) }, token).catch(()=>{});
+  const main = document.getElementById('adminChatMain');
+  main.innerHTML = `
+    <div class="chat-header">
+      <div class="user-avatar" style="width:30px;height:30px;font-size:14px">${photo?`<img src="${photo}">`:'🍽'}</div>
+      ${restName}
+    </div>
+    <div class="chat-messages" id="adminChatMessages"></div>
+    <div class="chat-input-area">
+      <input class="chat-input" id="adminChatInput" placeholder="Votre message..." onkeydown="if(event.key==='Enter'){event.preventDefault();sendAdminMsg(${restId})}">
+      <button class="btn btn-primary btn-sm" onclick="sendAdminMsg(${restId})">Envoyer</button>
+    </div>
+  `;
+  loadAdminMessages(restId);
+  loadAdminConversations();
+}
+
+async function loadAdminMessages(restId) {
+  const coId = parseInt(localStorage.getItem('fc_id'));
+  try {
+    const msgs = await apiFetch(`/api/messages?companyId=${coId}&restaurantId=${restId}`, {}, token);
+    const el = document.getElementById('adminChatMessages');
+    if (!el) return;
+    el.innerHTML = msgs.map(m=>`
+      <div class="msg ${m.sender_type==='company'?'msg-out':'msg-in'}">
+        ${m.content}
+        <div class="msg-time">${timeAgo(m.created_at)}</div>
+      </div>
+    `).join('');
+    el.scrollTop = el.scrollHeight;
+  } catch(e) {}
+}
+
+async function sendAdminMsg(restId) {
+  const input = document.getElementById('adminChatInput');
+  const content = input?.value.trim();
+  if (!content) return;
+  const coId = parseInt(localStorage.getItem('fc_id'));
+  try {
+    await apiFetch('/api/messages', { method: 'POST', body: JSON.stringify({ companyId: coId, restaurantId: restId, content }) }, token);
+    input.value = ''; loadAdminMessages(restId);
+  } catch(e) { toast('Erreur', 'error'); }
+}
+
+function startMsgPolling() {
+  if (msgInterval) clearInterval(msgInterval);
+  msgInterval = setInterval(()=>{ loadAdminConversations(); if(currentChatRestId) loadAdminMessages(currentChatRestId); }, 3000);
+}
+
+// Load affiliations for init
+loadAllRestaurants();
+
+// ── Settings ──────────────────────────────────────────
+async function loadSettings() {
+  initPasswordToggles();
+  // Afficher le libellé selon le rôle
+  const label = document.getElementById('coPwLabel');
+  if (label) label.textContent = role === 'admin' ? 'Mot de passe actuel (admin)' : 'Mot de passe actuel';
+  // Load company logo if available
+  try {
+    const r = await apiFetch('/api/admin/company-profile', {}, token);
+    if (r.logo_url) {
+      const av = document.getElementById('settingsPhotoPreview');
+      av.innerHTML = `<img src="${r.logo_url}" style="width:100%;height:100%;object-fit:cover;border-radius:14px">`;
+      document.getElementById('sidebarAvatar').innerHTML = `<img src="${r.logo_url}" style="width:100%;height:100%;object-fit:cover">`;
+    }
+  } catch(e) {}
+}
+
+async function handleSettingsPhoto(input) {
+  if (!input.files[0]) return;
+  const b64 = await readFileAsBase64(input.files[0]);
+  const av = document.getElementById('settingsPhotoPreview');
+  av.innerHTML = `<img src="${b64}" style="width:100%;height:100%;object-fit:cover;border-radius:14px">`;
+}
+
+async function saveCompanyPhoto() {
+  const img = document.getElementById('settingsPhotoPreview').querySelector('img');
+  if (!img || !img.src.startsWith('data:')) { toast('Sélectionnez une image', 'error'); return; }
+  try {
+    await apiFetch('/api/admin/company-profile', { method: 'PUT', body: JSON.stringify({ logoUrl: img.src }) }, token);
+    document.getElementById('sidebarAvatar').innerHTML = `<img src="${img.src}" style="width:100%;height:100%;object-fit:cover">`;
+    toast('Photo enregistrée !', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function changeCompanyPassword() {
+  const cur = document.getElementById('coPwCurrent').value;
+  const nw = document.getElementById('coPwNew').value;
+  const nw2 = document.getElementById('coPwNew2').value;
+  if (!cur || !nw) { toast('Remplissez tous les champs', 'error'); return; }
+  if (nw !== nw2) { toast('Les mots de passe ne correspondent pas', 'error'); return; }
+  if (nw.length < 6) { toast('Minimum 6 caractères', 'error'); return; }
+  try {
+    await apiFetch('/api/company/password', { method: 'PUT', body: JSON.stringify({ currentPassword: cur, newPassword: nw }) }, token);
+    toast('Mot de passe mis à jour !', 'success');
+    document.getElementById('coPwCurrent').value = '';
+    document.getElementById('coPwNew').value = '';
+    document.getElementById('coPwNew2').value = '';
+  } catch(e) { toast(e.message, 'error'); }
+}
+</script>
+</body>
+</html>

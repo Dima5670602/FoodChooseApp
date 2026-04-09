@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>FoodChooseApp — Dashboard Restaurant</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+<div id="toastContainer"></div>
+
+<div class="app-layout">
+<!-- SIDEBAR -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">🏪</span>
+    <div class="logo-name">Food<span>Choose</span></div>
+    <span class="logo-badge">Restaurant</span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">Principal</div>
+    <div class="nav-item active" data-page="dashboard"><span class="icon">📊</span><span>Tableau de bord</span></div>
+    <div class="nav-item" data-page="orders"><span class="icon">🛒</span><span>Commandes</span></div>
+    <div class="nav-item" data-page="messages"><span class="icon">💬</span><span>Messages</span><span class="nav-badge" id="msgBadge" style="display:none">0</span></div>
+    <div class="nav-section">Gestion</div>
+    <div class="nav-item" data-page="menus"><span class="icon">🍜</span><span>Mes menus</span></div>
+    <div class="nav-item" data-page="ratings"><span class="icon">⭐</span><span>Avis clients</span></div>
+    <div class="nav-section">Compte</div>
+    <div class="nav-item" data-page="profile"><span class="icon">⚙️</span><span>Mon profil</span></div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-card">
+      <div class="user-avatar" id="sidebarAvatar">🏪</div>
+      <div><div class="user-name" id="sidebarName">—</div><div class="user-role">Restaurant</div></div>
+    </div>
+    <button class="btn-logout" onclick="logout()">🚪 Déconnexion</button>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="hamburger" id="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+      <div class="topbar-title" id="pageTitle">Tableau de bord</div>
+    </div>
+    <div class="topbar-right">
+      <div style="position:relative">
+        <button class="notif-btn" onclick="toggleNotifDropdown()">🔔<span class="notif-count" id="notifCount" style="display:none">0</span></button>
+        <div class="notif-dropdown" id="notifDropdown"></div>
+      </div>
+    </div>
+  </div>
+  <div class="content">
+
+  <!-- ═══ DASHBOARD ═══ -->
+  <div class="page active" id="page-dashboard">
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-icon">🛒</div><div class="stat-number" id="s-today">—</div><div class="stat-label">Aujourd'hui</div></div>
+      <div class="stat-card"><div class="stat-icon">📅</div><div class="stat-number" id="s-week">—</div><div class="stat-label">Cette semaine</div></div>
+      <div class="stat-card"><div class="stat-icon">📆</div><div class="stat-number" id="s-month">—</div><div class="stat-label">Ce mois</div></div>
+      <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-number" id="s-revenue">—</div><div class="stat-label">Revenu mois (FCFA)</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Commandes (30 jours)</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-outline btn-sm" onclick="exportPDF('week')">PDF semaine</button>
+            <button class="btn btn-outline btn-sm" onclick="exportPDF('month')">PDF mois</button>
+          </div>
+        </div>
+        <div class="card-body"><div class="bar-chart" id="orderChart"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">⭐ Note moyenne & Affiliations</span></div>
+        <div class="card-body" id="ratingStats"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ORDERS ═══ -->
+  <div class="page" id="page-orders">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Commandes reçues</span>
+        <div class="date-filter">
+          <input type="date" id="ordersDate" onchange="loadOrders()">
+          <select id="orderPeriod" onchange="loadOrdersByPeriod()">
+            <option value="">Jour sélectionné</option>
+            <option value="week">Cette semaine</option>
+            <option value="month">Ce mois</option>
+          </select>
+        </div>
+      </div>
+      <div class="card-body" id="batchesList"></div>
+    </div>
+  </div>
+
+  <!-- ═══ MESSAGES ═══ -->
+  <div class="page" id="page-messages">
+    <div class="chat-layout" id="chatLayout">
+      <div class="chat-sidebar" id="chatSidebar">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--brown)">Conversations</div>
+        <div id="convList"></div>
+      </div>
+      <div class="chat-main" id="chatMain">
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px">
+          <div style="text-align:center"><div style="font-size:36px;margin-bottom:10px">💬</div>Sélectionnez une conversation</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ MENUS ═══ -->
+  <div class="page" id="page-menus">
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Mes menus</span>
+          <button class="btn btn-outline btn-sm" onclick="loadMenus()">🔄</button>
+        </div>
+        <div class="card-body">
+          <div id="menusTableWrap">
+            <div class="empty-state"><span class="icon">⏳</span>Chargement...</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Ajouter un menu</span></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Nom *</label>
+            <input class="form-control" id="menuName" placeholder="Riz sauce arachide">
+          </div>
+          <div class="form-group">
+            <label>Catégorie</label>
+            <select class="form-control" id="menuCat">
+              <option value="plat">🍜 Plat principal</option>
+              <option value="boisson">🥤 Boisson</option>
+              <option value="snack">🥨 Snack</option>
+              <option value="dessert">🍰 Dessert</option>
+              <option value="petit_déjeuner">🥐 Petit-déjeuner</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea class="form-control" id="menuDesc" rows="2" placeholder="Description..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Prix (FCFA)</label>
+            <input class="form-control" id="menuPrice" type="number" placeholder="0" min="0">
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="addMenu()">➕ Ajouter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ RATINGS ═══ -->
+  <div class="page" id="page-ratings">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Avis et notes des clients</span></div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Menu</th><th>Employé</th><th>Note</th><th>Commentaire</th><th>Date</th></tr></thead>
+            <tbody id="ratingsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PROFILE ═══ -->
+  <div class="page" id="page-profile">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Informations du restaurant</span></div>
+        <div class="card-body">
+          <div class="photo-upload">
+            <div class="photo-preview" id="photoPreview"><img id="photoImg" src="" style="display:none"></div>
+            <label class="btn btn-outline btn-sm" style="cursor:pointer">📷 Changer la photo<input type="file" accept="image/*" id="photoInput" style="display:none" onchange="handlePhoto(this)"></label>
+          </div>
+          <div class="form-group"><label>Nom</label><input class="form-control" id="pName"></div>
+          <div class="form-row">
+            <div class="form-group"><label>Téléphone</label><input class="form-control" id="pPhone"></div>
+            <div class="form-group"><label>Localisation</label><input class="form-control" id="pLocation"></div>
+          </div>
+          <div class="form-group"><label>Adresse</label><input class="form-control" id="pAddress"></div>
+          <button class="btn btn-primary" style="width:100%" onclick="saveProfile()">💾 Enregistrer</button>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">🔐 Changer le mot de passe</span></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Mot de passe actuel</label>
+              <div class="pw-wrap">
+                <input class="form-control" type="password" id="pwCurrent" placeholder="Mot de passe actuel">
+                <button class="pw-toggle" type="button">👁</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Nouveau mot de passe</label>
+              <div class="pw-wrap">
+                <input class="form-control" type="password" id="pwNew" placeholder="Minimum 6 caractères">
+                <button class="pw-toggle" type="button">👁</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Confirmer</label>
+              <div class="pw-wrap">
+                <input class="form-control" type="password" id="pwNew2" placeholder="Répétez le mot de passe">
+                <button class="pw-toggle" type="button">👁</button>
+              </div>
+            </div>
+            <button class="btn btn-primary" style="width:100%" onclick="changeRestPassword()">🔐 Mettre à jour</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Spécialités culinaires</span></div>
+          <div class="card-body">
+            <div id="profileSpecialties" style="display:flex;flex-wrap:wrap"></div>
+            <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="saveSpecialties()">💾 Mettre à jour</button>
+          </div>
+        </div>
+        <div class="card" style="margin-top:0">
+          <div class="card-header"><span class="card-title">Modes de paiement</span></div>
+          <div class="card-body">
+            <div id="profilePayments"></div>
+            <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="savePayments()">💾 Mettre à jour</button>
+          </div>
+        </div>
+        </div>
+        <div class="card" style="margin-top:0;border-color:#FCA5A5">
+          <div class="card-header"><span class="card-title" style="color:var(--danger)">⚠️ Zone dangereuse</span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">La suppression de votre compte est irréversible.</p>
+            <button class="btn btn-danger btn-sm" onclick="openDeleteModal()">🗑 Supprimer mon compte</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /content -->
+</main>
+</div>
+
+<!-- DELETE ACCOUNT MODAL -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <div class="modal-title">⚠️ Supprimer le compte</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px">Veuillez répondre aux questions suivantes avant de continuer.</p>
+    <div class="form-group">
+      <label>1. Pourquoi voulez-vous supprimer votre compte ?</label>
+      <textarea class="form-control" id="delReason" rows="2" placeholder="Votre raison..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>2. Avez-vous eu une bonne ou mauvaise expérience ?</label>
+      <select class="form-control" id="delExp">
+        <option value="">Sélectionner...</option>
+        <option value="très bonne">Très bonne</option>
+        <option value="bonne">Bonne</option>
+        <option value="moyenne">Moyenne</option>
+        <option value="mauvaise">Mauvaise</option>
+        <option value="très mauvaise">Très mauvaise</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>3. Un problème particulier à signaler ?</label>
+      <textarea class="form-control" id="delIssue" rows="2" placeholder="Décrivez le problème (optionnel)..."></textarea>
+    </div>
+    <div class="form-group" style="background:#FEF3C7;border-radius:10px;padding:12px">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;text-transform:none;font-size:13.5px;color:var(--text);letter-spacing:0;font-weight:500">
+        <input type="checkbox" id="delConfirm" style="width:16px;height:16px;accent-color:var(--danger)">
+        4. Je suis certain(e) de vouloir supprimer mon compte définitivement
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="document.getElementById('deleteModal').classList.remove('open')">Annuler</button>
+      <button class="btn btn-danger" onclick="deleteAccount()">Supprimer définitivement</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVOICE MODAL -->
+<div class="modal-overlay" id="invoiceModal">
+  <div class="modal">
+    <div class="modal-title">🧾 Envoyer la facture</div>
+    <div id="invoiceItems"></div>
+    <div style="margin-top:16px;padding:12px;background:#F9F1EB;border-radius:10px;font-size:14px">
+      Total : <strong id="invoiceTotal">0</strong> FCFA
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="document.getElementById('invoiceModal').classList.remove('open')">Annuler</button>
+      <button class="btn btn-primary" onclick="sendInvoice()">📤 Envoyer la facture</button>
+    </div>
+  </div>
+</div>
+
+<script src="/assets/js/utils.js"></script>
+<script>
+const token = localStorage.getItem('fc_token');
+if (!token || localStorage.getItem('fc_role') !== 'restaurant') window.location.href = '/restaurant/login';
+
+const restName = localStorage.getItem('fc_name') || '—';
+document.getElementById('sidebarName').textContent = restName.substring(0,20);
+
+let msgPollInterval = null;
+let currentChatCompanyId = null;
+let activeBatchId = null;
+
+function logout() { localStorage.clear(); window.location.href = '/'; }
+
+// Init
+initSidebar();
+initNav(null, (page) => {
+  if (page === 'dashboard') loadDashboard();
+  else if (page === 'orders') { document.getElementById('ordersDate').value = todayStr(); loadOrders(); }
+  else if (page === 'menus') loadMenus();
+  else if (page === 'ratings') loadRatings();
+  else if (page === 'profile') loadProfile();
+  else if (page === 'messages') { loadConversations(); startMsgPolling(); }
+});
+initNotifications();
+loadDashboard();
+
+// ── Dashboard ────────────────────────────────────────────
+async function loadDashboard() {
+  try {
+    const s = await apiFetch('/api/restaurant/stats', {}, token);
+    document.getElementById('s-today').textContent = s.today;
+    document.getElementById('s-week').textContent = s.week;
+    document.getElementById('s-month').textContent = s.month;
+    document.getElementById('s-revenue').textContent = (s.revenueMonth||0).toLocaleString();
+    // Chart
+    const chart = document.getElementById('orderChart');
+    if (s.dailyOrders && s.dailyOrders.length) {
+      const max = Math.max(...s.dailyOrders.map(d => parseInt(d.count))) || 1;
+      chart.innerHTML = s.dailyOrders.slice(-14).map(d => `
+        <div class="bar-col">
+          <div class="bar-fill" style="height:${Math.max(4, (parseInt(d.count)/max)*100)}px" title="${d.count} commandes"></div>
+          <div class="bar-label">${d.date.slice(5)}</div>
+        </div>
+      `).join('');
+    } else { chart.innerHTML = '<div style="color:var(--muted);font-size:13px;width:100%;text-align:center">Aucune donnée</div>'; }
+    // Ratings
+    document.getElementById('ratingStats').innerHTML = `
+      <div style="text-align:center;margin-bottom:14px">
+        <div style="font-size:40px;font-family:Playfair Display,serif;font-weight:700;color:var(--brown)">${s.avgRating}</div>
+        <div style="font-size:18px">${'⭐'.repeat(Math.round(parseFloat(s.avgRating||0)))}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">${s.totalRatings} avis</div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:12px 0">
+      <div style="font-size:13px;color:var(--muted)">🏢 <strong style="color:var(--brown)">${s.companies}</strong> entreprise(s) affiliée(s)</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px">💰 Revenu semaine : <strong style="color:var(--brown)">${(s.revenueWeek||0).toLocaleString()} FCFA</strong></div>
+    `;
+  } catch(e) { toast('Erreur tableau de bord', 'error'); }
+}
+
+// ── Orders ───────────────────────────────────────────────
+async function loadOrders() {
+  const date = document.getElementById('ordersDate').value || todayStr();
+  try {
+    const [orders, batches] = await Promise.all([
+      apiFetch(`/api/restaurant/orders?date=${date}`, {}, token),
+      apiFetch('/api/restaurant/batches', {}, token)
+    ]);
+    const batchForDate = batches.find(b => b.batch_date === date);
+    const el = document.getElementById('batchesList');
+    if (!orders.length) { el.innerHTML = '<div class="empty-state"><span class="icon">🛒</span>Aucune commande pour cette date</div>'; return; }
+    // Group by company
+    const byCompany = {};
+    orders.forEach(o => { if (!byCompany[o.company_name]) byCompany[o.company_name] = []; byCompany[o.company_name].push(o); });
+    el.innerHTML = Object.entries(byCompany).map(([co, ords]) => `
+      <div style="background:#F9F1EB;border-radius:12px;padding:16px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-weight:700;font-size:15px;color:var(--brown)">🏢 ${co}</div>
+          <span class="badge badge-${ords[0].status==='pending'?'pending':ords[0].status.includes('valid')?'validated':ords[0].status}">${ords[0].status}</span>
+        </div>
+        ${batchForDate && batchForDate.company_name === co ? `
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+            ${batchForDate.status==='pending'?`<button class="btn btn-success btn-sm" onclick="confirmBatch(${batchForDate.id})">✅ Confirmer réception</button>`:''}
+            ${batchForDate.status==='confirmed'?`<button class="btn btn-primary btn-sm" onclick="openInvoiceModal(${batchForDate.id}, '${co}')">🧾 Envoyer facture</button>`:''}
+            ${batchForDate.status==='invoiced'?'<span style="color:var(--success);font-size:13px;font-weight:600">✓ Facture envoyée</span>':''}
+          </div>
+        ` : ''}
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <tr style="background:rgba(44,24,16,.05)"><th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Employé</th><th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Menu</th><th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Prix</th><th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Boisson</th></tr>
+          ${ords.map(o=>`<tr><td style="padding:7px">${o.first_name} ${o.last_name}</td><td style="padding:7px">${o.menu_name}</td><td style="padding:7px">${parseFloat(o.price||0).toLocaleString()} FCFA</td><td style="padding:7px">${DRINK_LABELS[o.drink_preference]||'—'}</td></tr>`).join('')}
+          <tr style="background:rgba(232,90,42,.08)"><td colspan="2" style="padding:7px;font-weight:700">Total</td><td colspan="2" style="padding:7px;font-weight:700">${ords.reduce((s,o)=>s+parseFloat(o.price||0),0).toLocaleString()} FCFA</td></tr>
+        </table>
+      </div>
+    `).join('');
+  } catch(e) { toast('Erreur commandes', 'error'); }
+}
+
+async function loadOrdersByPeriod() {
+  const period = document.getElementById('orderPeriod').value;
+  if (!period) { loadOrders(); return; }
+  try {
+    const orders = await apiFetch(`/api/restaurant/orders?period=${period}`, {}, token);
+    const el = document.getElementById('batchesList');
+    if (!orders.length) { el.innerHTML = '<div class="empty-state"><span class="icon">🛒</span>Aucune commande</div>'; return; }
+    const total = orders.reduce((s,o)=>s+parseFloat(o.price||0),0);
+    el.innerHTML = `<div style="background:#FFF0EA;border-radius:12px;padding:14px;margin-bottom:14px;font-size:14px">📊 <strong>${orders.length}</strong> commandes — <strong>${total.toLocaleString()} FCFA</strong></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Entreprise</th><th>Employé</th><th>Menu</th><th>Prix</th><th>Statut</th></tr></thead>
+      <tbody>${orders.map(o=>`<tr><td>${formatDate(o.order_date)}</td><td>${o.company_name}</td><td>${o.first_name} ${o.last_name}</td><td>${o.menu_name}</td><td>${parseFloat(o.price||0).toLocaleString()}</td><td><span class="badge badge-${o.status.includes('valid')||o.status==='confirmed'?'validated':'pending'}">${o.status}</span></td></tr>`).join('')}
+      </tbody></table></div>`;
+  } catch(e) { toast('Erreur', 'error'); }
+}
+
+async function confirmBatch(batchId) {
+  if (!confirm('Confirmer la réception de cette commande ?')) return;
+  try {
+    await apiFetch(`/api/restaurant/batches/${batchId}/confirm`, { method: 'PUT', body: '{}' }, token);
+    toast('Commande confirmée !', 'success');
+    loadOrders();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// Invoice
+let currentBatchId = null;
+let currentBatchCompany = null;
+function openInvoiceModal(batchId, company) {
+  currentBatchId = batchId; currentBatchCompany = company;
+  // Build invoice items from today's orders
+  const date = document.getElementById('ordersDate').value || todayStr();
+  apiFetch(`/api/restaurant/orders?date=${date}`, {}, token).then(orders => {
+    const byMenu = {};
+    orders.filter(o => o.company_name === company).forEach(o => {
+      if (!byMenu[o.menu_name]) byMenu[o.menu_name] = { qty: 0, price: parseFloat(o.price||0) };
+      byMenu[o.menu_name].qty++;
+    });
+    const items = Object.entries(byMenu).map(([name, d]) => ({ name, qty: d.qty, price: d.price }));
+    const total = items.reduce((s,i)=>s+i.qty*i.price,0);
+    window._invoiceItems = items;
+    document.getElementById('invoiceItems').innerHTML = items.map((it,i) => `
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span>${it.name} × ${it.qty}</span>
+        <span>${(it.qty*it.price).toLocaleString()} FCFA</span>
+      </div>
+    `).join('');
+    document.getElementById('invoiceTotal').textContent = total.toLocaleString();
+    document.getElementById('invoiceModal').classList.add('open');
+  });
+}
+
+async function sendInvoice() {
+  const items = window._invoiceItems || [];
+  const total = items.reduce((s,i)=>s+i.qty*i.price,0);
+  try {
+    await apiFetch(`/api/restaurant/batches/${currentBatchId}/invoice`, { method: 'POST', body: JSON.stringify({ items, totalAmount: total }) }, token);
+    toast('Facture envoyée !', 'success');
+    document.getElementById('invoiceModal').classList.remove('open');
+    loadOrders();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Menus ────────────────────────────────────────────────
+async function loadMenus() {
+  try {
+    const menus = await apiFetch('/api/restaurant/menus', {}, token);
+    const el = document.getElementById('menusTableWrap');
+    if (!menus.length) { el.innerHTML = '<div class="empty-state"><span class="icon">🍜</span>Aucun menu. Ajoutez-en un !</div>'; return; }
+    const catGroups = {};
+    menus.forEach(m => { if (!catGroups[m.category]) catGroups[m.category] = []; catGroups[m.category].push(m); });
+    el.innerHTML = Object.entries(catGroups).map(([cat, items]) => `
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">${CAT_ICONS[cat]||'🍽'} ${cat}</div>
+        ${items.map(m => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:white;border-radius:10px;margin-bottom:6px;border:1px solid var(--border)">
+            <div style="flex:1">
+              <div style="font-weight:600;font-size:13.5px;color:var(--brown)">${m.name}</div>
+              ${m.description?`<div style="font-size:12px;color:var(--muted)">${m.description}</div>`:''}
+              <div style="font-size:12px;color:var(--orange);font-weight:600;margin-top:2px">${parseFloat(m.price||0).toLocaleString()} FCFA</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <label class="toggle" title="${m.available?'Disponible — cliquer pour désactiver':'Indisponible — cliquer pour activer'}">
+                <input type="checkbox" ${m.available?'checked':''} onchange="toggleMenu(${m.id}, this)">
+                <div class="toggle-slider"></div>
+              </label>
+              <button class="btn btn-danger btn-sm" onclick="deleteMenu(${m.id})">🗑</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `).join('');
+  } catch(e) { toast('Erreur', 'error'); }
+}
+
+async function addMenu() {
+  const name = document.getElementById('menuName').value.trim();
+  if (!name) { toast('Nom requis', 'error'); return; }
+  try {
+    await apiFetch('/api/restaurant/menus', { method: 'POST', body: JSON.stringify({ name, description: document.getElementById('menuDesc').value, category: document.getElementById('menuCat').value, price: document.getElementById('menuPrice').value }) }, token);
+    toast(`Menu "${name}" ajouté`, 'success');
+    document.getElementById('menuName').value = ''; document.getElementById('menuDesc').value = ''; document.getElementById('menuPrice').value = '';
+    loadMenus();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function toggleMenu(id, cb) {
+  try {
+    const r = await apiFetch(`/api/restaurant/menus/${id}/toggle`, { method: 'PUT', body: '{}' }, token);
+    toast(r.available ? 'Menu disponible' : 'Menu désactivé', 'info');
+  } catch(e) { toast('Erreur', 'error'); cb.checked = !cb.checked; }
+}
+
+async function deleteMenu(id) {
+  if (!confirm('Supprimer ce menu ?')) return;
+  await apiFetch(`/api/restaurant/menus/${id}`, { method: 'DELETE' }, token);
+  toast('Menu supprimé', 'success'); loadMenus();
+}
+
+// ── Ratings ──────────────────────────────────────────────
+async function loadRatings() {
+  try {
+    const r = await apiFetch('/api/restaurant/ratings', {}, token);
+    const tb = document.getElementById('ratingsTableBody');
+    if (!r.length) { tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><span class="icon">⭐</span>Aucun avis</div></td></tr>'; return; }
+    tb.innerHTML = r.map(rt => `<tr>
+      <td><strong>${rt.menu_name}</strong></td>
+      <td>${rt.first_name} ${rt.last_name}</td>
+      <td>${'⭐'.repeat(rt.score)}${'☆'.repeat(5-rt.score)}</td>
+      <td style="color:var(--muted);font-size:12px">${rt.comment||'—'}</td>
+      <td style="font-size:12px">${formatDate(rt.order_date)}</td>
+    </tr>`).join('');
+  } catch(e) {}
+}
+
+// ── Profile ──────────────────────────────────────────────
+let profileData = null;
+async function loadProfile() {
+  try {
+    profileData = await apiFetch('/api/restaurant/profile', {}, token);
+    document.getElementById('pName').value = profileData.name||'';
+    document.getElementById('pPhone').value = profileData.phone||'';
+    document.getElementById('pLocation').value = profileData.location||'';
+    document.getElementById('pAddress').value = profileData.address||'';
+    const pi = document.getElementById('photoImg');
+    if (profileData.photo_url) {
+      pi.src = profileData.photo_url; pi.style.display = 'block';
+      document.getElementById('photoPreview').style.background = 'transparent';
+      const av = document.getElementById('sidebarAvatar');
+      av.innerHTML = `<img src="${profileData.photo_url}" style="width:100%;height:100%;object-fit:cover">`;
+    }
+    initPasswordToggles();
+    renderSpecialties('profileSpecialties', profileData.specialties||[]);
+    renderPaymentFields('profilePayments', profileData.payment_types||[]);
+  } catch(e) { toast('Erreur profil', 'error'); }
+}
+
+async function handlePhoto(input) {
+  if (!input.files[0]) return;
+  const b64 = await readFileAsBase64(input.files[0]);
+  document.getElementById('photoImg').src = b64;
+  document.getElementById('photoImg').style.display = 'block';
+  document.getElementById('photoPreview').style.background = 'transparent';
+}
+
+async function saveProfile() {
+  const photoUrl = document.getElementById('photoImg').src || null;
+  try {
+    await apiFetch('/api/restaurant/profile', { method: 'PUT', body: JSON.stringify({ name: document.getElementById('pName').value, phone: document.getElementById('pPhone').value, location: document.getElementById('pLocation').value, address: document.getElementById('pAddress').value, paymentTypes: profileData?.payment_types||[], specialties: profileData?.specialties||[], photoUrl: photoUrl && photoUrl.startsWith('data:') ? photoUrl : null }) }, token);
+    toast('Profil mis à jour !', 'success');
+    localStorage.setItem('fc_name', document.getElementById('pName').value);
+    document.getElementById('sidebarName').textContent = document.getElementById('pName').value;
+    if (photoUrl && photoUrl.startsWith('data:')) {
+      document.getElementById('sidebarAvatar').innerHTML = `<img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover">`;
+    }
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function changeRestPassword() {
+  const cur = document.getElementById('pwCurrent').value;
+  const nw = document.getElementById('pwNew').value;
+  const nw2 = document.getElementById('pwNew2').value;
+  if (!cur || !nw) { toast('Remplissez tous les champs', 'error'); return; }
+  if (nw !== nw2) { toast('Les mots de passe ne correspondent pas', 'error'); return; }
+  if (nw.length < 6) { toast('Minimum 6 caractères', 'error'); return; }
+  try {
+    await apiFetch('/api/restaurant/password', { method: 'PUT', body: JSON.stringify({ currentPassword: cur, newPassword: nw }) }, token);
+    toast('Mot de passe mis à jour !', 'success');
+    document.getElementById('pwCurrent').value = '';
+    document.getElementById('pwNew').value = '';
+    document.getElementById('pwNew2').value = '';
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function saveSpecialties() {
+  const sp = getSelectedSpecialties('profileSpecialties');
+  await apiFetch('/api/restaurant/profile', { method: 'PUT', body: JSON.stringify({ name: profileData?.name, phone: profileData?.phone, location: profileData?.location, address: profileData?.address, paymentTypes: profileData?.payment_types||[], specialties: sp }) }, token);
+  toast('Spécialités mises à jour', 'success');
+}
+
+async function savePayments() {
+  const pt = getPaymentTypes('profilePayments');
+  await apiFetch('/api/restaurant/profile', { method: 'PUT', body: JSON.stringify({ name: profileData?.name, phone: profileData?.phone, location: profileData?.location, address: profileData?.address, paymentTypes: pt, specialties: profileData?.specialties||[] }) }, token);
+  toast('Modes de paiement mis à jour', 'success');
+}
+
+function openDeleteModal() { document.getElementById('deleteModal').classList.add('open'); }
+
+async function deleteAccount() {
+  const reason = document.getElementById('delReason').value.trim();
+  const experience = document.getElementById('delExp').value;
+  const issue = document.getElementById('delIssue').value.trim();
+  const confirmed = document.getElementById('delConfirm').checked;
+  if (!reason || !experience) { toast('Veuillez répondre aux questions 1 et 2', 'error'); return; }
+  if (!confirmed) { toast('Cochez la case de confirmation (question 4)', 'error'); return; }
+  if (!confirm('DERNIÈRE CONFIRMATION : Supprimer définitivement votre compte ?')) return;
+  try {
+    await apiFetch('/api/restaurant/account', { method: 'DELETE', body: JSON.stringify({ reason, experience, issue, confirmed }) }, token);
+    toast('Compte supprimé', 'success');
+    setTimeout(() => { localStorage.clear(); window.location.href = '/'; }, 1500);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Messages ─────────────────────────────────────────────
+let msgInterval = null;
+async function loadConversations() {
+  try {
+    const convs = await apiFetch('/api/restaurant/conversations', {}, token);
+    const el = document.getElementById('convList');
+    if (!convs.length) { el.innerHTML = '<div class="empty-state" style="padding:16px"><span class="icon">💬</span>Aucune conversation</div>'; return; }
+    let totalUnread = 0;
+    el.innerHTML = convs.map(c => {
+      totalUnread += parseInt(c.unread||0);
+      return `<div class="chat-conv ${currentChatCompanyId==c.company_id?'active':''}" onclick="openChat(${c.company_id}, '${c.company_name.replace(/'/g,"\\'")}', '${c.logo_url||''}')">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="chat-conv-name">${c.company_name}</div>
+          ${c.unread>0?`<span style="background:var(--orange);color:white;font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px">${c.unread}</span>`:''}
+        </div>
+        <div class="chat-conv-last">${c.last_message||'Pas encore de message'}</div>
+      </div>`;
+    }).join('');
+    const b = document.getElementById('msgBadge');
+    if (totalUnread > 0) { b.textContent = totalUnread; b.style.display = 'inline'; }
+    else { b.style.display = 'none'; }
+  } catch(e) {}
+}
+
+async function openChat(companyId, companyName, photo) {
+  currentChatCompanyId = companyId;
+  await apiFetch('/api/messages/read', { method: 'PUT', body: JSON.stringify({ companyId, restaurantId: parseInt(localStorage.getItem('fc_id')) }) }, token);
+  const main = document.getElementById('chatMain');
+  main.innerHTML = `
+    <div class="chat-header">
+      <div class="user-avatar" style="width:30px;height:30px;font-size:14px">${photo?`<img src="${photo}">`:'🏢'}</div>
+      ${companyName}
+    </div>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input-area">
+      <input class="chat-input" id="chatInput" placeholder="Votre message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg(${companyId})}">
+      <button class="btn btn-primary btn-sm" onclick="sendMsg(${companyId})">Envoyer</button>
+    </div>
+  `;
+  loadMessages(companyId);
+  loadConversations();
+}
+
+async function loadMessages(companyId) {
+  const restId = parseInt(localStorage.getItem('fc_id'));
+  try {
+    const msgs = await apiFetch(`/api/messages?companyId=${companyId}&restaurantId=${restId}`, {}, token);
+    const el = document.getElementById('chatMessages');
+    if (!el) return;
+    el.innerHTML = msgs.map(m => `
+      <div class="msg ${m.sender_type==='restaurant'?'msg-out':'msg-in'}">
+        ${m.content}
+        <div class="msg-time">${timeAgo(m.created_at)}</div>
+      </div>
+    `).join('');
+    el.scrollTop = el.scrollHeight;
+  } catch(e) {}
+}
+
+async function sendMsg(companyId) {
+  const input = document.getElementById('chatInput');
+  const content = input?.value.trim();
+  if (!content) return;
+  const restId = parseInt(localStorage.getItem('fc_id'));
+  try {
+    await apiFetch('/api/messages', { method: 'POST', body: JSON.stringify({ companyId, restaurantId: restId, content }) }, token);
+    input.value = '';
+    loadMessages(companyId);
+  } catch(e) { toast('Erreur envoi', 'error'); }
+}
+
+function startMsgPolling() {
+  if (msgInterval) clearInterval(msgInterval);
+  msgInterval = setInterval(() => { loadConversations(); if (currentChatCompanyId) loadMessages(currentChatCompanyId); }, 3000);
+}
+
+function exportPDF(period) {
+  fetch(`/api/restaurant/export-pdf?period=${period}`, { headers: { 'Authorization': `Bearer ${token}` } })
+    .then(r => r.blob()).then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `rapport_${period}.pdf`; a.click(); URL.revokeObjectURL(url);
+    }).catch(() => toast('Erreur export PDF', 'error'));
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1168 @@
+require('dotenv').config();
+const express = require('express');
+const { Pool } = require('pg');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
+const PDFDocument = require('pdfkit');
+const cors = require('cors');
+const path = require('path');
+const cron = require('node-cron');
+
+const app = express();
+const PORT = process.env.PORT || 3050;
+const JWT_SECRET = process.env.JWT_SECRET || 'foodchooseapp_2024_secret';
+const ADMIN_USER = process.env.ADMIN_USER || 'admin';
+const ADMIN_PASS = process.env.ADMIN_PASSWORD || '@admin123';
+
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.static(path.join(__dirname, '../public')));
+
+// ─── DB ──────────────────────────────────────────────────────────
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+
+async function initDB() {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS companies (
+      id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL, sector VARCHAR(255),
+      phone VARCHAR(50), address TEXT, email VARCHAR(255) UNIQUE NOT NULL,
+      location VARCHAR(255), password_hash VARCHAR(255) NOT NULL, logo_url TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS restaurants (
+      id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL, address TEXT,
+      location VARCHAR(255), email VARCHAR(255) UNIQUE NOT NULL, phone VARCHAR(50),
+      payment_types JSONB DEFAULT '[]', specialties JSONB DEFAULT '[]',
+      password_hash VARCHAR(255) NOT NULL, photo_url TEXT, created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS affiliations (
+      id SERIAL PRIMARY KEY, company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
+      restaurant_id INTEGER REFERENCES restaurants(id) ON DELETE CASCADE,
+      created_at TIMESTAMP DEFAULT NOW(), UNIQUE(company_id, restaurant_id)
+    );
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY, company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
+      employee_id VARCHAR(100) UNIQUE NOT NULL, first_name VARCHAR(100) NOT NULL,
+      last_name VARCHAR(100) NOT NULL, email VARCHAR(255) UNIQUE NOT NULL,
+      password_hash VARCHAR(255) NOT NULL, photo_url TEXT, drink_preference VARCHAR(20),
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS menus (
+      id SERIAL PRIMARY KEY, restaurant_id INTEGER REFERENCES restaurants(id) ON DELETE CASCADE,
+      name VARCHAR(255) NOT NULL, description TEXT, category VARCHAR(100) DEFAULT 'plat',
+      price DECIMAL(10,2) DEFAULT 0, available BOOLEAN DEFAULT TRUE, image_url TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS orders (
+      id SERIAL PRIMARY KEY, company_id INTEGER REFERENCES companies(id),
+      restaurant_id INTEGER REFERENCES restaurants(id),
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      menu_id INTEGER REFERENCES menus(id), order_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      drink_preference VARCHAR(20), status VARCHAR(30) DEFAULT 'pending', notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(user_id, restaurant_id, order_date)
+    );
+    CREATE TABLE IF NOT EXISTS order_batches (
+      id SERIAL PRIMARY KEY, company_id INTEGER REFERENCES companies(id),
+      restaurant_id INTEGER REFERENCES restaurants(id), batch_date DATE NOT NULL,
+      status VARCHAR(30) DEFAULT 'pending', total_amount DECIMAL(10,2) DEFAULT 0,
+      confirmed_at TIMESTAMP, created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(company_id, restaurant_id, batch_date)
+    );
+    CREATE TABLE IF NOT EXISTS invoices (
+      id SERIAL PRIMARY KEY, company_id INTEGER REFERENCES companies(id),
+      restaurant_id INTEGER REFERENCES restaurants(id),
+      batch_id INTEGER REFERENCES order_batches(id),
+      invoice_date DATE DEFAULT CURRENT_DATE, total_amount DECIMAL(10,2),
+      items JSONB DEFAULT '[]', status VARCHAR(20) DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS order_history (
+      id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      company_id INTEGER REFERENCES companies(id), employee_id VARCHAR(100),
+      employee_name VARCHAR(255), restaurant_name VARCHAR(255), menu_name VARCHAR(255),
+      order_date DATE, drink_preference VARCHAR(20), action VARCHAR(50),
+      action_timestamp TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS messages (
+      id SERIAL PRIMARY KEY, sender_type VARCHAR(20) NOT NULL, sender_id INTEGER NOT NULL,
+      company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
+      restaurant_id INTEGER REFERENCES restaurants(id) ON DELETE CASCADE,
+      content TEXT NOT NULL, read_by_company BOOLEAN DEFAULT FALSE,
+      read_by_restaurant BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS notifications (
+      id SERIAL PRIMARY KEY, target_type VARCHAR(20) NOT NULL, target_id INTEGER NOT NULL,
+      title VARCHAR(255), message TEXT, type VARCHAR(50), read BOOLEAN DEFAULT FALSE,
+      data JSONB DEFAULT '{}', created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS ratings (
+      id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id),
+      menu_id INTEGER REFERENCES menus(id), restaurant_id INTEGER REFERENCES restaurants(id),
+      score INTEGER CHECK (score BETWEEN 1 AND 5), comment TEXT, order_date DATE,
+      created_at TIMESTAMP DEFAULT NOW(), UNIQUE(user_id, menu_id, order_date)
+    );
+    CREATE TABLE IF NOT EXISTS deletion_feedback (
+      id SERIAL PRIMARY KEY, restaurant_id INTEGER, reason TEXT, experience VARCHAR(100),
+      issue TEXT, confirmed BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id SERIAL PRIMARY KEY, email VARCHAR(255) NOT NULL, user_type VARCHAR(20) NOT NULL,
+      otp_code VARCHAR(6) NOT NULL, expires_at TIMESTAMP NOT NULL,
+      used BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT NOW()
+    );
+  `;
+  try { await pool.query(sql); console.log('✅ DB initialisée'); }
+  catch (e) { console.error('DB error:', e.message); }
+}
+initDB();
+
+// ─── Email ────────────────────────────────────────────────────────
+const mailer = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT) || 587,
+  secure: false,
+  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+});
+
+async function sendMail(to, subject, html) {
+  if (!process.env.SMTP_USER) return;
+  try { await mailer.sendMail({ from: `"FoodChooseApp" <${process.env.SMTP_USER}>`, to, subject, html }); }
+  catch (e) { console.error('Mail error:', e.message); }
+}
+
+function welcomeEmailHtml(name, extra = '') {
+  return `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;padding:40px;background:#FFF8F3;border-radius:12px;">
+    <h1 style="color:#E85A2A;font-size:28px;">🍽 FoodChooseApp</h1>
+    <h2 style="color:#2C1810;">Bienvenue, ${name} !</h2>
+    <p style="color:#4A3728;line-height:1.7">Votre compte a été créé avec succès sur <strong>FoodChooseApp</strong>, la plateforme de gestion des repas d'entreprise.</p>
+    ${extra}
+    <p style="color:#8B6554;font-size:13px;margin-top:24px;border-top:1px solid #F0E6DE;padding-top:16px">© FoodChooseApp — Plateforme de choix de repas</p>
+  </div>`;
+}
+
+async function createNotification(targetType, targetId, title, message, type, data = {}) {
+  try {
+    await pool.query(
+      'INSERT INTO notifications (target_type, target_id, title, message, type, data) VALUES ($1,$2,$3,$4,$5,$6)',
+      [targetType, targetId, title, message, type, JSON.stringify(data)]
+    );
+  } catch (e) { console.error('Notif error:', e.message); }
+}
+
+// ─── Auth Middlewares ─────────────────────────────────────────────
+function makeAuth(role) {
+  return (req, res, next) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Token manquant' });
+    try {
+      const d = jwt.verify(token, JWT_SECRET);
+      if (d.role !== role) return res.status(403).json({ error: 'Accès refusé' });
+      req.user = d;
+      next();
+    } catch { res.status(401).json({ error: 'Token invalide' }); }
+  };
+}
+const restaurantAuth = makeAuth('restaurant');
+const companyAuth = makeAuth('company');
+const adminAuth = makeAuth('admin');
+const employeeAuth = makeAuth('employee');
+
+// Accepte à la fois 'company' et 'admin' (tous deux liés à une entreprise)
+function companyOrAdminAuth(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Token manquant' });
+  try {
+    const d = jwt.verify(token, JWT_SECRET);
+    if (!['company', 'admin'].includes(d.role)) return res.status(403).json({ error: 'Accès refusé' });
+    req.user = d;
+    next();
+  } catch { res.status(401).json({ error: 'Token invalide' }); }
+}
+
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+
+// ════════════════════════════════════════════════════════════════
+//  AUTH ROUTES
+// ════════════════════════════════════════════════════════════════
+
+// Register restaurant
+app.post('/api/auth/restaurant/register', async (req, res) => {
+  const { name, address, location, email, phone, paymentTypes, specialties, password } = req.body;
+  if (!name || !email || !password) return res.status(400).json({ error: 'Champs requis manquants' });
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const r = await pool.query(
+      'INSERT INTO restaurants (name,address,location,email,phone,payment_types,specialties,password_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,name,email',
+      [name, address||'', location||'', email, phone||'', JSON.stringify(paymentTypes||[]), JSON.stringify(specialties||[]), hash]
+    );
+    await sendMail(email, '🍽 Bienvenue sur FoodChooseApp !', welcomeEmailHtml(name,
+      `<p style="color:#4A3728">Votre restaurant <strong>${name}</strong> est maintenant enregistré sur la plateforme. Connectez-vous pour commencer à gérer vos menus et recevoir des commandes.</p>`
+    ));
+    res.status(201).json(r.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') return res.status(400).json({ error: 'Email déjà utilisé' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Login restaurant
+app.post('/api/auth/restaurant/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const r = await pool.query('SELECT * FROM restaurants WHERE email=$1', [email]);
+    if (!r.rows.length) return res.status(401).json({ error: 'Identifiants incorrects' });
+    const rest = r.rows[0];
+    if (!await bcrypt.compare(password, rest.password_hash)) return res.status(401).json({ error: 'Identifiants incorrects' });
+    const token = jwt.sign({ id: rest.id, role: 'restaurant', name: rest.name }, JWT_SECRET, { expiresIn: '8h' });
+    res.json({ token, role: 'restaurant', id: rest.id, name: rest.name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Register company
+app.post('/api/auth/company/register', async (req, res) => {
+  const { name, sector, phone, address, email, location, password } = req.body;
+  if (!name || !email || !password) return res.status(400).json({ error: 'Champs requis manquants' });
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const r = await pool.query(
+      'INSERT INTO companies (name,sector,phone,address,email,location,password_hash) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id,name,email',
+      [name, sector||'', phone||'', address||'', email, location||'', hash]
+    );
+    await sendMail(email, '🍽 Bienvenue sur FoodChooseApp !', welcomeEmailHtml(name,
+      `<p style="color:#4A3728">Votre entreprise <strong>${name}</strong> est enregistrée. Votre chargé(e) de commande peut maintenant se connecter et s'affilier aux restaurants.</p>`
+    ));
+    res.status(201).json(r.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') return res.status(400).json({ error: 'Email déjà utilisé' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Login company
+app.post('/api/auth/company/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const r = await pool.query('SELECT * FROM companies WHERE email=$1', [email]);
+    if (!r.rows.length) return res.status(401).json({ error: 'Identifiants incorrects' });
+    const co = r.rows[0];
+    if (!await bcrypt.compare(password, co.password_hash)) return res.status(401).json({ error: 'Identifiants incorrects' });
+    const token = jwt.sign({ id: co.id, role: 'company', name: co.name }, JWT_SECRET, { expiresIn: '8h' });
+    res.json({ token, role: 'company', id: co.id, name: co.name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Login admin (tied to company)
+app.post('/api/auth/admin/login', async (req, res) => {
+  const { username, password, companyEmail } = req.body;
+  if (username !== ADMIN_USER || password !== ADMIN_PASS) return res.status(401).json({ error: 'Identifiants admin incorrects' });
+  try {
+    const r = await pool.query('SELECT id, name FROM companies WHERE email=$1', [companyEmail]);
+    if (!r.rows.length) return res.status(404).json({ error: "Entreprise introuvable" });
+    const co = r.rows[0];
+    const token = jwt.sign({ id: co.id, role: 'admin', name: `Admin – ${co.name}`, companyId: co.id }, JWT_SECRET, { expiresIn: '8h' });
+    res.json({ token, role: 'admin', companyId: co.id, companyName: co.name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Login employee
+app.post('/api/auth/employee/login', async (req, res) => {
+  const { employeeId, password } = req.body;
+  try {
+    const r = await pool.query('SELECT * FROM users WHERE employee_id=$1', [employeeId]);
+    if (!r.rows.length) return res.status(401).json({ error: 'Identifiants incorrects' });
+    const u = r.rows[0];
+    if (!await bcrypt.compare(password, u.password_hash)) return res.status(401).json({ error: 'Identifiants incorrects' });
+    const token = jwt.sign({ id: u.id, role: 'employee', employeeId: u.employee_id, name: `${u.first_name} ${u.last_name}`, companyId: u.company_id }, JWT_SECRET, { expiresIn: '8h' });
+    res.json({ token, role: 'employee', name: `${u.first_name} ${u.last_name}`, employeeId: u.employee_id, companyId: u.company_id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════
+//  RESTAURANT ROUTES
+// ════════════════════════════════════════════════════════════════
+app.get('/api/restaurant/profile', restaurantAuth, async (req, res) => {
+  const r = await pool.query('SELECT id,name,address,location,email,phone,payment_types,specialties,photo_url,created_at FROM restaurants WHERE id=$1', [req.user.id]);
+  res.json(r.rows[0]);
+});
+
+app.put('/api/restaurant/profile', restaurantAuth, async (req, res) => {
+  const { name, address, location, phone, paymentTypes, specialties, photoUrl } = req.body;
+  try {
+    await pool.query(
+      'UPDATE restaurants SET name=$1,address=$2,location=$3,phone=$4,payment_types=$5,specialties=$6,photo_url=COALESCE($7,photo_url) WHERE id=$8',
+      [name, address, location, phone, JSON.stringify(paymentTypes||[]), JSON.stringify(specialties||[]), photoUrl||null, req.user.id]
+    );
+    res.json({ message: 'Profil mis à jour' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/restaurant/account', restaurantAuth, async (req, res) => {
+  const { reason, experience, issue, confirmed } = req.body;
+  if (!confirmed) return res.status(400).json({ error: 'Suppression non confirmée' });
+  try {
+    await pool.query('INSERT INTO deletion_feedback (restaurant_id,reason,experience,issue,confirmed) VALUES ($1,$2,$3,$4,$5)',
+      [req.user.id, reason, experience, issue, true]);
+    await pool.query('DELETE FROM restaurants WHERE id=$1', [req.user.id]);
+    res.json({ message: 'Compte supprimé' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Menus
+app.get('/api/restaurant/menus', restaurantAuth, async (req, res) => {
+  const r = await pool.query('SELECT * FROM menus WHERE restaurant_id=$1 ORDER BY category,name', [req.user.id]);
+  res.json(r.rows);
+});
+
+app.post('/api/restaurant/menus', restaurantAuth, async (req, res) => {
+  const { name, description, category, price, imageUrl } = req.body;
+  if (!name) return res.status(400).json({ error: 'Nom requis' });
+  try {
+    const r = await pool.query(
+      'INSERT INTO menus (restaurant_id,name,description,category,price,image_url) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+      [req.user.id, name, description||'', category||'plat', parseFloat(price)||0, imageUrl||null]
+    );
+    res.status(201).json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/restaurant/menus/:id', restaurantAuth, async (req, res) => {
+  const { name, description, category, price, imageUrl } = req.body;
+  try {
+    await pool.query(
+      'UPDATE menus SET name=$1,description=$2,category=$3,price=$4,image_url=COALESCE($5,image_url) WHERE id=$6 AND restaurant_id=$7',
+      [name, description||'', category||'plat', parseFloat(price)||0, imageUrl||null, req.params.id, req.user.id]
+    );
+    res.json({ message: 'Menu mis à jour' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/restaurant/menus/:id/toggle', restaurantAuth, async (req, res) => {
+  const r = await pool.query(
+    'UPDATE menus SET available = NOT available WHERE id=$1 AND restaurant_id=$2 RETURNING available',
+    [req.params.id, req.user.id]
+  );
+  res.json({ available: r.rows[0]?.available });
+});
+
+app.delete('/api/restaurant/menus/:id', restaurantAuth, async (req, res) => {
+  await pool.query('DELETE FROM menus WHERE id=$1 AND restaurant_id=$2', [req.params.id, req.user.id]);
+  res.json({ message: 'Menu supprimé' });
+});
+
+// Restaurant orders
+app.get('/api/restaurant/orders', restaurantAuth, async (req, res) => {
+  const { date, period } = req.query;
+  let whereDate = 'o.order_date = $2';
+  let dateParam = date || todayStr();
+  if (period === 'week') { whereDate = "o.order_date >= date_trunc('week', CURRENT_DATE) AND o.order_date <= CURRENT_DATE"; dateParam = null; }
+  if (period === 'month') { whereDate = "o.order_date >= date_trunc('month', CURRENT_DATE) AND o.order_date <= CURRENT_DATE"; dateParam = null; }
+  const q = dateParam
+    ? `SELECT o.*,u.first_name,u.last_name,m.name AS menu_name,m.price,c.name AS company_name FROM orders o JOIN users u ON o.user_id=u.id JOIN menus m ON o.menu_id=m.id JOIN companies c ON o.company_id=c.id WHERE o.restaurant_id=$1 AND ${whereDate} ORDER BY o.created_at DESC`
+    : `SELECT o.*,u.first_name,u.last_name,m.name AS menu_name,m.price,c.name AS company_name FROM orders o JOIN users u ON o.user_id=u.id JOIN menus m ON o.menu_id=m.id JOIN companies c ON o.company_id=c.id WHERE o.restaurant_id=$1 AND ${whereDate} ORDER BY o.created_at DESC`;
+  const params = dateParam ? [req.user.id, dateParam] : [req.user.id];
+  const r = await pool.query(q, params);
+  res.json(r.rows);
+});
+
+app.get('/api/restaurant/batches', restaurantAuth, async (req, res) => {
+  const r = await pool.query(
+    'SELECT ob.*,c.name AS company_name FROM order_batches ob JOIN companies c ON ob.company_id=c.id WHERE ob.restaurant_id=$1 ORDER BY ob.created_at DESC LIMIT 50',
+    [req.user.id]
+  );
+  res.json(r.rows);
+});
+
+app.put('/api/restaurant/batches/:id/confirm', restaurantAuth, async (req, res) => {
+  try {
+    const batch = await pool.query('SELECT * FROM order_batches WHERE id=$1 AND restaurant_id=$2', [req.params.id, req.user.id]);
+    if (!batch.rows.length) return res.status(404).json({ error: 'Batch introuvable' });
+    await pool.query("UPDATE order_batches SET status='confirmed', confirmed_at=NOW() WHERE id=$1", [req.params.id]);
+    await pool.query("UPDATE orders SET status='confirmed' WHERE company_id=$1 AND restaurant_id=$2 AND order_date=$3", [batch.rows[0].company_id, req.user.id, batch.rows[0].batch_date]);
+    const restName = req.user.name;
+    await createNotification('company', batch.rows[0].company_id, '✅ Commande confirmée', `${restName} a confirmé réception de votre commande du ${batch.rows[0].batch_date}`, 'order', { batchId: req.params.id });
+    const co = await pool.query('SELECT email,name FROM companies WHERE id=$1', [batch.rows[0].company_id]);
+    if (co.rows.length) await sendMail(co.rows[0].email, `✅ Commande confirmée — ${restName}`, welcomeEmailHtml(co.rows[0].name, `<p style="color:#4A3728"><strong>${restName}</strong> a confirmé réception de votre commande du ${batch.rows[0].batch_date}.</p>`));
+    res.json({ message: 'Commande confirmée' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/restaurant/batches/:id/invoice', restaurantAuth, async (req, res) => {
+  const { items, totalAmount } = req.body;
+  try {
+    const batch = await pool.query('SELECT * FROM order_batches WHERE id=$1 AND restaurant_id=$2', [req.params.id, req.user.id]);
+    if (!batch.rows.length) return res.status(404).json({ error: 'Batch introuvable' });
+    const inv = await pool.query(
+      'INSERT INTO invoices (company_id,restaurant_id,batch_id,total_amount,items) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+      [batch.rows[0].company_id, req.user.id, req.params.id, totalAmount, JSON.stringify(items||[])]
+    );
+    await pool.query("UPDATE order_batches SET status='invoiced', total_amount=$1 WHERE id=$2", [totalAmount, req.params.id]);
+    await pool.query("UPDATE orders SET status='invoiced' WHERE company_id=$1 AND restaurant_id=$2 AND order_date=$3", [batch.rows[0].company_id, req.user.id, batch.rows[0].batch_date]);
+    await createNotification('company', batch.rows[0].company_id, '🧾 Nouvelle facture', `Facture de ${req.user.name} pour le ${batch.rows[0].batch_date} — ${totalAmount} FCFA`, 'invoice', { invoiceId: inv.rows[0].id });
+    const co = await pool.query('SELECT email,name FROM companies WHERE id=$1', [batch.rows[0].company_id]);
+    if (co.rows.length) await sendMail(co.rows[0].email, `🧾 Facture reçue — ${req.user.name}`, welcomeEmailHtml(co.rows[0].name, `<p style="color:#4A3728">Vous avez reçu une facture de <strong>${req.user.name}</strong> d'un montant de <strong>${totalAmount} FCFA</strong> pour le ${batch.rows[0].batch_date}.</p>`));
+    res.json({ invoiceId: inv.rows[0].id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/restaurant/stats', restaurantAuth, async (req, res) => {
+  try {
+    const today = await pool.query("SELECT COUNT(*) FROM orders WHERE restaurant_id=$1 AND order_date=CURRENT_DATE", [req.user.id]);
+    const week = await pool.query("SELECT COUNT(*) FROM orders WHERE restaurant_id=$1 AND order_date>=date_trunc('week',CURRENT_DATE)", [req.user.id]);
+    const month = await pool.query("SELECT COUNT(*) FROM orders WHERE restaurant_id=$1 AND order_date>=date_trunc('month',CURRENT_DATE)", [req.user.id]);
+    const revenue = await pool.query("SELECT COALESCE(SUM(m.price),0) AS total FROM orders o JOIN menus m ON o.menu_id=m.id WHERE o.restaurant_id=$1 AND o.order_date>=date_trunc('month',CURRENT_DATE)", [req.user.id]);
+    const revenueWeek = await pool.query("SELECT COALESCE(SUM(m.price),0) AS total FROM orders o JOIN menus m ON o.menu_id=m.id WHERE o.restaurant_id=$1 AND o.order_date>=date_trunc('week',CURRENT_DATE)", [req.user.id]);
+    const companies = await pool.query("SELECT COUNT(DISTINCT company_id) FROM affiliations WHERE restaurant_id=$1", [req.user.id]);
+    const ratings = await pool.query("SELECT AVG(score) AS avg, COUNT(*) AS total FROM ratings WHERE restaurant_id=$1", [req.user.id]);
+    const dailyOrders = await pool.query(`
+      SELECT o.order_date::text AS date, COUNT(*) AS count, COALESCE(SUM(m.price),0) AS revenue
+      FROM orders o JOIN menus m ON o.menu_id=m.id
+      WHERE o.restaurant_id=$1 AND o.order_date>=CURRENT_DATE-30
+      GROUP BY o.order_date ORDER BY o.order_date
+    `, [req.user.id]);
+    res.json({
+      today: parseInt(today.rows[0].count),
+      week: parseInt(week.rows[0].count),
+      month: parseInt(month.rows[0].count),
+      revenueMonth: parseFloat(revenue.rows[0].total),
+      revenueWeek: parseFloat(revenueWeek.rows[0].total),
+      companies: parseInt(companies.rows[0].count),
+      avgRating: parseFloat(ratings.rows[0].avg || 0).toFixed(1),
+      totalRatings: parseInt(ratings.rows[0].total),
+      dailyOrders: dailyOrders.rows
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/restaurant/ratings', restaurantAuth, async (req, res) => {
+  const r = await pool.query(`
+    SELECT r.*,u.first_name,u.last_name,m.name AS menu_name
+    FROM ratings r JOIN users u ON r.user_id=u.id JOIN menus m ON r.menu_id=m.id
+    WHERE r.restaurant_id=$1 ORDER BY r.created_at DESC LIMIT 50
+  `, [req.user.id]);
+  res.json(r.rows);
+});
+
+app.get('/api/restaurant/export-pdf', restaurantAuth, async (req, res) => {
+  const { period } = req.query;
+  let whereDate = "o.order_date = CURRENT_DATE";
+  let periodLabel = "Aujourd'hui";
+  if (period === 'week') { whereDate = "o.order_date >= date_trunc('week',CURRENT_DATE)"; periodLabel = "Cette semaine"; }
+  if (period === 'month') { whereDate = "o.order_date >= date_trunc('month',CURRENT_DATE)"; periodLabel = "Ce mois"; }
+  try {
+    const orders = await pool.query(`
+      SELECT o.order_date,u.first_name,u.last_name,m.name AS menu_name,m.price,c.name AS company_name,o.status
+      FROM orders o JOIN users u ON o.user_id=u.id JOIN menus m ON o.menu_id=m.id JOIN companies c ON o.company_id=c.id
+      WHERE o.restaurant_id=$1 AND ${whereDate} ORDER BY o.order_date,c.name,u.last_name
+    `, [req.user.id]);
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="rapport_${period||'jour'}.pdf"`);
+    doc.pipe(res);
+    doc.rect(0,0,doc.page.width,110).fill('#E85A2A');
+    doc.fillColor('#FFF8F3').fontSize(26).font('Helvetica-Bold').text('🍽 FoodChooseApp', 50, 30);
+    doc.fontSize(14).font('Helvetica').text(`Rapport — ${periodLabel}`, 50, 62);
+    doc.fontSize(11).text(`Restaurant : ${req.user.name} | Généré le ${new Date().toLocaleDateString('fr-FR')}`, 50, 82);
+    let y = 135;
+    const total = orders.rows.reduce((s,o) => s + parseFloat(o.price||0), 0);
+    doc.fillColor('#2C1810').fontSize(13).font('Helvetica-Bold').text(`${orders.rows.length} commandes — Total : ${total.toLocaleString()} FCFA`, 50, y);
+    y += 28;
+    doc.rect(50, y, doc.page.width-100, 22).fill('#2C1810');
+    doc.fillColor('#FFF8F3').fontSize(9).font('Helvetica-Bold');
+    ['Date','Entreprise','Employé','Menu','Prix','Statut'].forEach((h,i) => {
+      doc.text(h, 50+[0,70,160,250,360,430][i], y+6);
+    });
+    y += 30;
+    orders.rows.forEach((o,i) => {
+      if (y > doc.page.height-80) { doc.addPage(); y = 50; }
+      if (i%2===0) doc.rect(50,y-3,doc.page.width-100,18).fill('#FFF8F3');
+      doc.fillColor('#2C1810').fontSize(8).font('Helvetica');
+      const d = new Date(o.order_date+'T12:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+      doc.text(d,50,y); doc.text((o.company_name||'').substring(0,12),120,y);
+      doc.text(`${o.last_name} ${o.first_name}`.substring(0,14),210,y);
+      doc.text((o.menu_name||'').substring(0,18),300,y);
+      doc.text(`${parseFloat(o.price||0).toLocaleString()}`,410,y);
+      doc.fillColor(o.status==='validated'||o.status==='confirmed'?'#16a34a':'#E85A2A').text(o.status,480,y);
+      doc.fillColor('#2C1810'); y += 20;
+    });
+    doc.rect(0,doc.page.height-35,doc.page.width,35).fill('#2C1810');
+    doc.fillColor('#8B6554').fontSize(9).text('FoodChooseApp',50,doc.page.height-20);
+    doc.end();
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════
+//  NOTIFICATIONS
+// ════════════════════════════════════════════════════════════════
+app.get('/api/notifications', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  try {
+    const d = jwt.verify(token, JWT_SECRET);
+    let targetType = d.role === 'restaurant' ? 'restaurant' : d.role === 'admin' || d.role === 'company' ? 'company' : 'employee';
+    const r = await pool.query('SELECT * FROM notifications WHERE target_type=$1 AND target_id=$2 ORDER BY created_at DESC LIMIT 30', [targetType, d.id]);
+    res.json(r.rows);
+  } catch { res.json([]); }
+});
+
+app.put('/api/notifications/:id/read', async (req, res) => {
+  await pool.query('UPDATE notifications SET read=TRUE WHERE id=$1', [req.params.id]);
+  res.json({ ok: true });
+});
+
+app.put('/api/notifications/read-all', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  try {
+    const d = jwt.verify(token, JWT_SECRET);
+    let targetType = d.role === 'restaurant' ? 'restaurant' : 'company';
+    await pool.query('UPDATE notifications SET read=TRUE WHERE target_type=$1 AND target_id=$2', [targetType, d.id]);
+    res.json({ ok: true });
+  } catch { res.json({ ok: false }); }
+});
+
+// ════════════════════════════════════════════════════════════════
+//  MESSAGES
+// ════════════════════════════════════════════════════════════════
+app.get('/api/messages', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const { companyId, restaurantId } = req.query;
+  try {
+    jwt.verify(token, JWT_SECRET);
+    const r = await pool.query(
+      'SELECT m.*,CASE WHEN m.sender_type=\'company\' THEN c.name ELSE r.name END AS sender_name FROM messages m LEFT JOIN companies c ON m.company_id=c.id LEFT JOIN restaurants r ON m.restaurant_id=r.id WHERE m.company_id=$1 AND m.restaurant_id=$2 ORDER BY m.created_at',
+      [companyId, restaurantId]
+    );
+    res.json(r.rows);
+  } catch { res.json([]); }
+});
+
+app.post('/api/messages', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const { companyId, restaurantId, content } = req.body;
+  try {
+    const d = jwt.verify(token, JWT_SECRET);
+    const senderType = d.role === 'restaurant' ? 'restaurant' : 'company';
+    const senderId = d.id;
+    const r = await pool.query(
+      'INSERT INTO messages (sender_type,sender_id,company_id,restaurant_id,content) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [senderType, senderId, companyId, restaurantId, content]
+    );
+    // notify recipient
+    if (senderType === 'company') {
+      await createNotification('restaurant', restaurantId, '💬 Nouveau message', content.substring(0,80), 'message', { companyId, restaurantId });
+      const rest = await pool.query('SELECT email,name FROM restaurants WHERE id=$1', [restaurantId]);
+      if (rest.rows.length) await sendMail(rest.rows[0].email, '💬 Nouveau message FoodChooseApp', welcomeEmailHtml(rest.rows[0].name, `<p style="color:#4A3728">Vous avez reçu un message : <em>${content.substring(0,100)}</em></p>`));
+    } else {
+      await createNotification('company', companyId, '💬 Nouveau message', content.substring(0,80), 'message', { companyId, restaurantId });
+      const co = await pool.query('SELECT email,name FROM companies WHERE id=$1', [companyId]);
+      if (co.rows.length) await sendMail(co.rows[0].email, '💬 Nouveau message FoodChooseApp', welcomeEmailHtml(co.rows[0].name, `<p style="color:#4A3728">Vous avez reçu un message : <em>${content.substring(0,100)}</em></p>`));
+    }
+    res.status(201).json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/messages/read', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const { companyId, restaurantId } = req.body;
+  try {
+    const d = jwt.verify(token, JWT_SECRET);
+    const field = d.role === 'restaurant' ? 'read_by_restaurant' : 'read_by_company';
+    await pool.query(`UPDATE messages SET ${field}=TRUE WHERE company_id=$1 AND restaurant_id=$2`, [companyId, restaurantId]);
+    res.json({ ok: true });
+  } catch { res.json({ ok: false }); }
+});
+
+app.get('/api/messages/unread-count', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const { companyId, restaurantId } = req.query;
+  try {
+    const d = jwt.verify(token, JWT_SECRET);
+    const field = d.role === 'restaurant' ? 'read_by_restaurant' : 'read_by_company';
+    const r = await pool.query(`SELECT COUNT(*) FROM messages WHERE company_id=$1 AND restaurant_id=$2 AND ${field}=FALSE AND sender_type!=$3`, [companyId, restaurantId, d.role]);
+    res.json({ count: parseInt(r.rows[0].count) });
+  } catch { res.json({ count: 0 }); }
+});
+
+// ════════════════════════════════════════════════════════════════
+//  ADMIN ROUTES
+// ════════════════════════════════════════════════════════════════
+app.get('/api/admin/all-restaurants', adminAuth, async (req, res) => {
+  const r = await pool.query(`
+    SELECT r.id, r.name, r.address, r.location, r.phone, r.specialties, r.photo_url,
+    EXISTS(SELECT 1 FROM affiliations a WHERE a.company_id=$1 AND a.restaurant_id=r.id) AS affiliated,
+    (SELECT COUNT(*) FROM menus m WHERE m.restaurant_id=r.id AND m.available=TRUE) AS menu_count
+    FROM restaurants r ORDER BY r.name
+  `, [req.user.companyId]);
+  res.json(r.rows);
+});
+
+app.get('/api/admin/restaurants/:id/menus', adminAuth, async (req, res) => {
+  const r = await pool.query('SELECT * FROM menus WHERE restaurant_id=$1 AND available=TRUE ORDER BY category,name', [req.params.id]);
+  const rest = await pool.query('SELECT name,address,specialties,photo_url FROM restaurants WHERE id=$1', [req.params.id]);
+  res.json({ restaurant: rest.rows[0], menus: r.rows });
+});
+
+app.post('/api/admin/affiliations', adminAuth, async (req, res) => {
+  const { restaurantId } = req.body;
+  try {
+    await pool.query('INSERT INTO affiliations (company_id,restaurant_id) VALUES ($1,$2)', [req.user.companyId, restaurantId]);
+    const rest = await pool.query('SELECT name FROM restaurants WHERE id=$1', [restaurantId]);
+    await createNotification('restaurant', restaurantId, '🤝 Nouvelle affiliation', `L'entreprise souhaite s'affilier à votre restaurant`, 'affiliation', { companyId: req.user.companyId });
+    res.json({ message: 'Affiliation créée' });
+  } catch (e) {
+    if (e.code==='23505') return res.status(400).json({ error: 'Déjà affilié' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/admin/affiliations/:restaurantId', adminAuth, async (req, res) => {
+  await pool.query('DELETE FROM affiliations WHERE company_id=$1 AND restaurant_id=$2', [req.user.companyId, req.params.restaurantId]);
+  res.json({ message: 'Affiliation supprimée' });
+});
+
+app.get('/api/admin/affiliations', adminAuth, async (req, res) => {
+  const r = await pool.query(`
+    SELECT r.id,r.name,r.address,r.specialties,r.photo_url,a.created_at AS affiliated_at,
+    (SELECT COUNT(*) FROM menus m WHERE m.restaurant_id=r.id AND m.available=TRUE) AS menu_count
+    FROM affiliations a JOIN restaurants r ON a.restaurant_id=r.id
+    WHERE a.company_id=$1 ORDER BY r.name
+  `, [req.user.companyId]);
+  res.json(r.rows);
+});
+
+app.get('/api/admin/employees', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
+  const r = await pool.query('SELECT id,employee_id,first_name,last_name,email,drink_preference,photo_url,created_at FROM users WHERE company_id=$1 ORDER BY last_name', [companyId]);
+  res.json(r.rows);
+});
+
+app.post('/api/admin/employees', companyOrAdminAuth, async (req, res) => {
+  const { firstName, lastName, email, employeeId } = req.body;
+  if (!firstName||!lastName||!email||!employeeId) return res.status(400).json({ error: 'Champs requis' });
+  const companyId = req.user.companyId || req.user.id;
+  const defaultPwd = process.env.DEFAULT_EMPLOYEE_PASSWORD || 'Elimmeka123';
+  try {
+    const hash = await bcrypt.hash(defaultPwd, 10);
+    const r = await pool.query(
+      'INSERT INTO users (company_id,employee_id,first_name,last_name,email,password_hash) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id,employee_id,first_name,last_name,email',
+      [companyId, employeeId.trim(), firstName.trim(), lastName.trim(), email.trim(), hash]
+    );
+    const appUrl = process.env.APP_URL || 'http://localhost:3050';
+    await sendMail(email, '🍽 Vos identifiants FoodChooseApp',
+      `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;padding:40px;background:#FFF8F3;border-radius:12px;">
+        <h1 style="color:#E85A2A;font-size:28px;">🍽 FoodChooseApp</h1>
+        <h2 style="color:#2C1810;">Bonjour ${firstName} ${lastName},</h2>
+        <p style="color:#4A3728;line-height:1.7">Votre compte employé a été créé sur <strong>FoodChooseApp</strong>. Voici vos identifiants de connexion :</p>
+        <div style="background:#2C1810;border-radius:10px;padding:28px;text-align:center;margin:20px 0">
+          <p style="color:#F9C74F;font-size:11px;letter-spacing:1px;margin:0 0 6px">IDENTIFIANT EMPLOYÉ</p>
+          <p style="color:#FFF8F3;font-size:24px;font-weight:700;font-family:monospace;margin:0 0 20px">${employeeId}</p>
+          <p style="color:#F9C74F;font-size:11px;letter-spacing:1px;margin:0 0 6px">MOT DE PASSE PROVISOIRE</p>
+          <p style="color:#FFF8F3;font-size:24px;font-weight:700;font-family:monospace;margin:0">${defaultPwd}</p>
+        </div>
+        <div style="text-align:center;margin:28px 0">
+          <a href="${appUrl}/employee" style="background:#E85A2A;color:#FFF8F3;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:16px;font-weight:700;display:inline-block;">Accéder à la plateforme →</a>
+        </div>
+        <p style="color:#E85A2A;font-weight:600;font-size:14px;">⚠️ Pensez à changer votre mot de passe dès votre première connexion.</p>
+        <p style="color:#4A3728;font-size:13px;line-height:1.6">Pour cela : connectez-vous → <strong>Mon profil</strong> → <strong>Changer mon mot de passe</strong>.</p>
+        <p style="color:#8B6554;font-size:13px;margin-top:24px;border-top:1px solid #F0E6DE;padding-top:16px">© FoodChooseApp — Plateforme de choix de repas</p>
+      </div>`
+    );
+    res.status(201).json(r.rows[0]);
+  } catch (e) {
+    if (e.code==='23505') return res.status(400).json({ error: 'ID ou email déjà existant' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/admin/employees/:id', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
+  await pool.query('DELETE FROM users WHERE id=$1 AND company_id=$2', [req.params.id, companyId]);
+  res.json({ message: 'Employé supprimé' });
+});
+
+app.get('/api/admin/orders', adminAuth, async (req, res) => {
+  const { date, restaurantId } = req.query;
+  const d = date || todayStr();
+  let q = `SELECT o.*,u.first_name,u.last_name,u.employee_id,m.name AS menu_name,m.price,r.name AS restaurant_name
+    FROM orders o JOIN users u ON o.user_id=u.id JOIN menus m ON o.menu_id=m.id JOIN restaurants r ON o.restaurant_id=r.id
+    WHERE o.company_id=$1 AND o.order_date=$2`;
+  const params = [req.user.companyId, d];
+  if (restaurantId) { q += ` AND o.restaurant_id=$3`; params.push(restaurantId); }
+  q += ' ORDER BY r.name,u.last_name';
+  const r = await pool.query(q, params);
+  res.json(r.rows);
+});
+
+app.post('/api/admin/orders/validate', adminAuth, async (req, res) => {
+  const { date, restaurantId } = req.body;
+  const d = date || todayStr();
+  try {
+    const r = await pool.query(
+      "UPDATE orders SET status='validated_by_admin', updated_at=NOW() WHERE company_id=$1 AND order_date=$2 AND status='pending' AND ($3::integer IS NULL OR restaurant_id=$3) RETURNING restaurant_id",
+      [req.user.companyId, d, restaurantId||null]
+    );
+    const restaurantIds = [...new Set(r.rows.map(o => o.restaurant_id))];
+    const coName = req.user.name.replace('Admin – ', '');
+    for (const rid of restaurantIds) {
+      await pool.query(
+        'INSERT INTO order_batches (company_id,restaurant_id,batch_date,status) VALUES ($1,$2,$3,\'pending\') ON CONFLICT (company_id,restaurant_id,batch_date) DO UPDATE SET status=\'pending\'',
+        [req.user.companyId, rid, d]
+      );
+      await createNotification('restaurant', rid, '🛒 Nouvelle commande', `Commande de ${coName} pour le ${d}`, 'order', { companyId: req.user.companyId, date: d });
+      const rest = await pool.query('SELECT email,name FROM restaurants WHERE id=$1', [rid]);
+      if (rest.rows.length) await sendMail(rest.rows[0].email, `🛒 Nouvelle commande — ${coName}`, `<div style="font-family:Georgia;padding:40px;background:#FFF8F3"><h1 style="color:#E85A2A">🍽 FoodChooseApp</h1><p><strong>${coName}</strong> a passé une commande pour le ${d}. Connectez-vous pour confirmer et envoyer la facture.</p></div>`);
+    }
+    res.json({ validated: r.rowCount });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/invoices', adminAuth, async (req, res) => {
+  const r = await pool.query(`
+    SELECT i.*,r.name AS restaurant_name FROM invoices i JOIN restaurants r ON i.restaurant_id=r.id
+    WHERE i.company_id=$1 ORDER BY i.created_at DESC
+  `, [req.user.companyId]);
+  res.json(r.rows);
+});
+
+app.get('/api/admin/invoices/:id/pdf', adminAuth, async (req, res) => {
+  try {
+    const inv = await pool.query(`SELECT i.*,r.name AS restaurant_name,r.address AS restaurant_address,c.name AS company_name FROM invoices i JOIN restaurants r ON i.restaurant_id=r.id JOIN companies c ON i.company_id=c.id WHERE i.id=$1 AND i.company_id=$2`, [req.params.id, req.user.companyId]);
+    if (!inv.rows.length) return res.status(404).json({ error: 'Facture introuvable' });
+    const inv_data = inv.rows[0];
+    const items = Array.isArray(inv_data.items) ? inv_data.items : JSON.parse(inv_data.items||'[]');
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="facture_${req.params.id}.pdf"`);
+    doc.pipe(res);
+    doc.rect(0,0,doc.page.width,110).fill('#E85A2A');
+    doc.fillColor('#FFF8F3').fontSize(26).font('Helvetica-Bold').text('🍽 FoodChooseApp', 50, 30);
+    doc.fontSize(13).font('Helvetica').text('FACTURE', 50, 62);
+    doc.fontSize(10).text(`N° FAC-${String(req.params.id).padStart(5,'0')} | ${new Date(inv_data.created_at).toLocaleDateString('fr-FR')}`, 50, 80);
+    let y = 135;
+    doc.fillColor('#2C1810').fontSize(12).font('Helvetica-Bold').text('DE :', 50, y);
+    doc.fontSize(11).font('Helvetica').fillColor('#4A3728').text(inv_data.restaurant_name, 50, y+16).text(inv_data.restaurant_address||'', 50, y+30);
+    doc.fillColor('#2C1810').fontSize(12).font('Helvetica-Bold').text('POUR :', 300, y);
+    doc.fontSize(11).font('Helvetica').fillColor('#4A3728').text(inv_data.company_name, 300, y+16);
+    y += 80;
+    doc.rect(50,y,doc.page.width-100,22).fill('#2C1810');
+    doc.fillColor('#FFF8F3').fontSize(9).font('Helvetica-Bold').text('DESCRIPTION',58,y+6).text('QTÉ',300,y+6).text('P.U.',380,y+6).text('TOTAL',450,y+6);
+    y += 30;
+    items.forEach((item, i) => {
+      if (i%2===0) doc.rect(50,y-3,doc.page.width-100,18).fill('#FFF8F3');
+      doc.fillColor('#2C1810').fontSize(9).font('Helvetica');
+      doc.text(item.name||'', 58, y).text(String(item.qty||1), 308, y).text(`${item.price||0} FCFA`, 380, y).text(`${(item.qty||1)*(item.price||0)} FCFA`, 450, y);
+      y += 20;
+    });
+    y += 10;
+    doc.rect(350,y,doc.page.width-400,30).fill('#E85A2A');
+    doc.fillColor('#FFF8F3').fontSize(13).font('Helvetica-Bold').text(`TOTAL : ${inv_data.total_amount} FCFA`, 360, y+8);
+    doc.rect(0,doc.page.height-35,doc.page.width,35).fill('#2C1810');
+    doc.fillColor('#8B6554').fontSize(9).text('FoodChooseApp — Gestion des repas d\'entreprise', 50, doc.page.height-20);
+    doc.end();
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/history', adminAuth, async (req, res) => {
+  const { from, to, employeeId } = req.query;
+  let q = 'SELECT * FROM order_history WHERE company_id=$1';
+  const params = [req.user.companyId];
+  if (from) { params.push(from); q += ` AND order_date>=$${params.length}`; }
+  if (to) { params.push(to); q += ` AND order_date<=$${params.length}`; }
+  if (employeeId) { params.push(employeeId); q += ` AND employee_id=$${params.length}`; }
+  q += ' ORDER BY action_timestamp DESC LIMIT 200';
+  const r = await pool.query(q, params);
+  res.json(r.rows);
+});
+
+app.get('/api/admin/stats', adminAuth, async (req, res) => {
+  try {
+    const empCount = await pool.query('SELECT COUNT(*) FROM users WHERE company_id=$1', [req.user.companyId]);
+    const affCount = await pool.query('SELECT COUNT(*) FROM affiliations WHERE company_id=$1', [req.user.companyId]);
+    const todayOrders = await pool.query("SELECT COUNT(*) FROM orders WHERE company_id=$1 AND order_date=CURRENT_DATE", [req.user.companyId]);
+    const pendingOrders = await pool.query("SELECT COUNT(*) FROM orders WHERE company_id=$1 AND order_date=CURRENT_DATE AND status='pending'", [req.user.companyId]);
+    res.json({ employees: parseInt(empCount.rows[0].count), affiliations: parseInt(affCount.rows[0].count), todayOrders: parseInt(todayOrders.rows[0].count), pendingOrders: parseInt(pendingOrders.rows[0].count) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/expenses', adminAuth, async (req, res) => {
+  const { period } = req.query;
+  let groupBy = "to_char(o.order_date,'YYYY-MM-DD')";
+  let whereDate = "o.order_date >= CURRENT_DATE - 7";
+  if (period === 'month') { whereDate = "o.order_date >= date_trunc('month',CURRENT_DATE)"; groupBy = "to_char(o.order_date,'YYYY-MM-DD')"; }
+  if (period === 'quarter') { whereDate = "o.order_date >= date_trunc('quarter',CURRENT_DATE)"; groupBy = "to_char(date_trunc('week',o.order_date),'YYYY-MM-DD')"; }
+  try {
+    const r = await pool.query(`
+      SELECT ${groupBy} AS period, COUNT(*) AS orders, COALESCE(SUM(m.price),0) AS total
+      FROM orders o JOIN menus m ON o.menu_id=m.id
+      WHERE o.company_id=$1 AND ${whereDate}
+      GROUP BY ${groupBy} ORDER BY period
+    `, [req.user.companyId]);
+    const totalMonth = await pool.query("SELECT COALESCE(SUM(m.price),0) AS total FROM orders o JOIN menus m ON o.menu_id=m.id WHERE o.company_id=$1 AND o.order_date>=date_trunc('month',CURRENT_DATE)", [req.user.companyId]);
+    res.json({ series: r.rows, totalMonth: parseFloat(totalMonth.rows[0].total) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/export-pdf', adminAuth, async (req, res) => {
+  const { date } = req.query;
+  const d = date || todayStr();
+  try {
+    const orders = await pool.query(`
+      SELECT o.*,u.first_name,u.last_name,m.name AS menu_name,m.price,r.name AS restaurant_name,o.drink_preference
+      FROM orders o JOIN users u ON o.user_id=u.id JOIN menus m ON o.menu_id=m.id JOIN restaurants r ON o.restaurant_id=r.id
+      WHERE o.company_id=$1 AND o.order_date=$2 ORDER BY r.name,u.last_name
+    `, [req.user.companyId, d]);
+    const coName = req.user.name.replace('Admin – ','');
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    res.setHeader('Content-Type','application/pdf');
+    res.setHeader('Content-Disposition',`attachment; filename="commandes_${d}.pdf"`);
+    doc.pipe(res);
+    doc.rect(0,0,doc.page.width,110).fill('#E85A2A');
+    doc.fillColor('#FFF8F3').fontSize(26).font('Helvetica-Bold').text('🍽 FoodChooseApp', 50, 30);
+    doc.fontSize(14).font('Helvetica').text(`Commandes — ${new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}`, 50, 60);
+    doc.fontSize(10).text(`Entreprise : ${coName}`, 50, 82);
+    let y = 135;
+    const total = orders.rows.reduce((s,o)=>s+parseFloat(o.price||0),0);
+    doc.fillColor('#2C1810').fontSize(12).font('Helvetica-Bold').text(`${orders.rows.length} commandes — ${total.toLocaleString()} FCFA`, 50, y);
+    y += 28;
+    doc.rect(50,y,doc.page.width-100,22).fill('#2C1810');
+    doc.fillColor('#FFF8F3').fontSize(9).font('Helvetica-Bold');
+    doc.text('EMPLOYÉ',58,y+6).text('RESTAURANT',180,y+6).text('MENU',300,y+6).text('BOISSON',420,y+6).text('STATUT',490,y+6);
+    y += 30;
+    orders.rows.forEach((o,i)=>{
+      if(y>doc.page.height-80){doc.addPage();y=50;}
+      if(i%2===0) doc.rect(50,y-3,doc.page.width-100,18).fill('#FFF8F3');
+      const drinkLabel={'lipton':'Lipton','cafeine':'Caféine','both':'Les 2'}[o.drink_preference]||'-';
+      doc.fillColor('#2C1810').fontSize(8).font('Helvetica');
+      doc.text(`${o.last_name} ${o.first_name}`,58,y).text((o.restaurant_name||'').substring(0,16),180,y).text((o.menu_name||'').substring(0,20),300,y).text(drinkLabel,420,y);
+      doc.fillColor(o.status.includes('valid')||o.status==='confirmed'?'#16a34a':'#E85A2A').text(o.status,490,y);
+      doc.fillColor('#2C1810'); y+=20;
+    });
+    doc.rect(0,doc.page.height-35,doc.page.width,35).fill('#2C1810');
+    doc.fillColor('#8B6554').fontSize(9).text('FoodChooseApp',50,doc.page.height-20);
+    doc.end();
+  } catch(e){ res.status(500).json({error:e.message}); }
+});
+
+app.get('/api/admin/conversations', adminAuth, async (req, res) => {
+  const r = await pool.query(`
+    SELECT r.id AS restaurant_id, r.name AS restaurant_name, r.photo_url,
+    (SELECT COUNT(*) FROM messages m WHERE m.company_id=$1 AND m.restaurant_id=r.id AND m.read_by_company=FALSE AND m.sender_type='restaurant') AS unread,
+    (SELECT content FROM messages m WHERE m.company_id=$1 AND m.restaurant_id=r.id ORDER BY m.created_at DESC LIMIT 1) AS last_message,
+    (SELECT created_at FROM messages m WHERE m.company_id=$1 AND m.restaurant_id=r.id ORDER BY m.created_at DESC LIMIT 1) AS last_at
+    FROM affiliations a JOIN restaurants r ON a.restaurant_id=r.id WHERE a.company_id=$1 ORDER BY last_at DESC NULLS LAST
+  `, [req.user.companyId]);
+  res.json(r.rows);
+});
+
+// ════════════════════════════════════════════════════════════════
+//  EMPLOYEE ROUTES
+// ════════════════════════════════════════════════════════════════
+app.get('/api/employee/restaurants', employeeAuth, async (req, res) => {
+  const r = await pool.query(`
+    SELECT r.id,r.name,r.address,r.specialties,r.photo_url,
+    (SELECT COUNT(*) FROM menus m WHERE m.restaurant_id=r.id AND m.available=TRUE) AS menu_count
+    FROM affiliations a JOIN restaurants r ON a.restaurant_id=r.id
+    WHERE a.company_id=$1 ORDER BY r.name
+  `, [req.user.companyId]);
+  res.json(r.rows);
+});
+
+app.get('/api/employee/restaurants/:id/menus', employeeAuth, async (req, res) => {
+  const r = await pool.query('SELECT * FROM menus WHERE restaurant_id=$1 AND available=TRUE ORDER BY category,name', [req.params.id]);
+  res.json(r.rows);
+});
+
+app.get('/api/employee/order', employeeAuth, async (req, res) => {
+  const { restaurantId } = req.query;
+  const d = todayStr();
+  let q = `SELECT o.*,m.name AS menu_name,r.name AS restaurant_name FROM orders o JOIN menus m ON o.menu_id=m.id JOIN restaurants r ON o.restaurant_id=r.id WHERE o.user_id=$1 AND o.order_date=$2`;
+  const params = [req.user.id, d];
+  if (restaurantId) { q += ` AND o.restaurant_id=$3`; params.push(restaurantId); }
+  const r = await pool.query(q, params);
+  res.json(restaurantId ? (r.rows[0]||null) : r.rows);
+});
+
+app.post('/api/employee/order', employeeAuth, async (req, res) => {
+  const { menuId, restaurantId, drinkPreference, notes } = req.body;
+  if (!menuId||!restaurantId) return res.status(400).json({ error: 'Menu et restaurant requis' });
+  try {
+    const menu = await pool.query('SELECT restaurant_id FROM menus WHERE id=$1 AND available=TRUE', [menuId]);
+    if (!menu.rows.length) return res.status(404).json({ error: 'Menu indisponible' });
+    const r = await pool.query(
+      'INSERT INTO orders (company_id,restaurant_id,user_id,menu_id,order_date,drink_preference,notes) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [req.user.companyId, restaurantId, req.user.id, menuId, todayStr(), drinkPreference||null, notes||null]
+    );
+    if (drinkPreference) await pool.query('UPDATE users SET drink_preference=$1 WHERE id=$2', [drinkPreference, req.user.id]);
+    const menuData = await pool.query('SELECT name FROM menus WHERE id=$1', [menuId]);
+    const restData = await pool.query('SELECT name FROM restaurants WHERE id=$1', [restaurantId]);
+    await pool.query('INSERT INTO order_history (user_id,company_id,employee_id,employee_name,restaurant_name,menu_name,order_date,drink_preference,action) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [req.user.id, req.user.companyId, req.user.employeeId, req.user.name, restData.rows[0]?.name, menuData.rows[0]?.name, todayStr(), drinkPreference||null, 'created']);
+    res.status(201).json(r.rows[0]);
+  } catch (e) {
+    if (e.code==='23505') return res.status(400).json({ error: 'Commande déjà existante pour ce restaurant aujourd\'hui' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/employee/order/:id', employeeAuth, async (req, res) => {
+  const { menuId, drinkPreference, notes } = req.body;
+  try {
+    const ex = await pool.query('SELECT * FROM orders WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
+    if (!ex.rows.length) return res.status(404).json({ error: 'Commande introuvable' });
+    if (ex.rows[0].status !== 'pending') return res.status(400).json({ error: 'Impossible de modifier cette commande' });
+    await pool.query('UPDATE orders SET menu_id=$1,drink_preference=$2,notes=$3,updated_at=NOW() WHERE id=$4 AND user_id=$5', [menuId, drinkPreference||null, notes||null, req.params.id, req.user.id]);
+    if (drinkPreference) await pool.query('UPDATE users SET drink_preference=$1 WHERE id=$2', [drinkPreference, req.user.id]);
+    const menuData = await pool.query('SELECT name FROM menus WHERE id=$1', [menuId]);
+    await pool.query('INSERT INTO order_history (user_id,company_id,employee_id,employee_name,restaurant_name,menu_name,order_date,drink_preference,action) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [req.user.id, req.user.companyId, req.user.employeeId, req.user.name, '', menuData.rows[0]?.name, ex.rows[0].order_date, drinkPreference||null, 'updated']);
+    res.json({ message: 'Commande mise à jour' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/employee/order/:id', employeeAuth, async (req, res) => {
+  const ex = await pool.query('SELECT o.*,m.name AS menu_name,r.name AS rest_name FROM orders o JOIN menus m ON o.menu_id=m.id JOIN restaurants r ON o.restaurant_id=r.id WHERE o.id=$1 AND o.user_id=$2', [req.params.id, req.user.id]);
+  if (!ex.rows.length) return res.status(404).json({ error: 'Introuvable' });
+  if (ex.rows[0].status !== 'pending') return res.status(400).json({ error: 'Impossible de supprimer' });
+  await pool.query('DELETE FROM orders WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
+  await pool.query('INSERT INTO order_history (user_id,company_id,employee_id,employee_name,restaurant_name,menu_name,order_date,action) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+    [req.user.id, req.user.companyId, req.user.employeeId, req.user.name, ex.rows[0].rest_name, ex.rows[0].menu_name, ex.rows[0].order_date, 'deleted']);
+  res.json({ message: 'Supprimée' });
+});
+
+app.post('/api/employee/ratings', employeeAuth, async (req, res) => {
+  const { menuId, restaurantId, score, comment, orderDate } = req.body;
+  try {
+    await pool.query(
+      'INSERT INTO ratings (user_id,menu_id,restaurant_id,score,comment,order_date) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (user_id,menu_id,order_date) DO UPDATE SET score=$4,comment=$5',
+      [req.user.id, menuId, restaurantId, score, comment||null, orderDate||todayStr()]
+    );
+    const menuData = await pool.query('SELECT name FROM menus WHERE id=$1', [menuId]);
+    await createNotification('restaurant', restaurantId, `⭐ Nouvelle note : ${score}/5`, `${req.user.name} a noté ${menuData.rows[0]?.name} — ${'⭐'.repeat(score)}`, 'rating', { score, menuId });
+    res.json({ message: 'Note enregistrée' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/employee/history', employeeAuth, async (req, res) => {
+  const r = await pool.query('SELECT * FROM order_history WHERE user_id=$1 ORDER BY action_timestamp DESC', [req.user.id]);
+  res.json(r.rows);
+});
+
+app.delete('/api/employee/history', employeeAuth, async (req, res) => {
+  await pool.query('DELETE FROM order_history WHERE user_id=$1', [req.user.id]);
+  res.json({ message: 'Historique vidé' });
+});
+
+app.delete('/api/employee/history/:id', employeeAuth, async (req, res) => {
+  await pool.query('DELETE FROM order_history WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
+  res.json({ message: 'Supprimé' });
+});
+
+app.get('/api/employee/profile', employeeAuth, async (req, res) => {
+  const r = await pool.query('SELECT id,employee_id,first_name,last_name,email,drink_preference,photo_url,created_at FROM users WHERE id=$1', [req.user.id]);
+  res.json(r.rows[0]);
+});
+
+app.put('/api/employee/profile', employeeAuth, async (req, res) => {
+  const { newPassword, photoUrl } = req.body;
+  try {
+    if (newPassword) {
+      const hash = await bcrypt.hash(newPassword, 10);
+      await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, req.user.id]);
+    }
+    if (photoUrl) await pool.query('UPDATE users SET photo_url=$1 WHERE id=$2', [photoUrl, req.user.id]);
+    res.json({ message: 'Profil mis à jour' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Restaurant conversations
+app.get('/api/restaurant/conversations', restaurantAuth, async (req, res) => {
+  const r = await pool.query(`
+    SELECT c.id AS company_id, c.name AS company_name, c.logo_url,
+    (SELECT COUNT(*) FROM messages m WHERE m.restaurant_id=$1 AND m.company_id=c.id AND m.read_by_restaurant=FALSE AND m.sender_type='company') AS unread,
+    (SELECT content FROM messages m WHERE m.restaurant_id=$1 AND m.company_id=c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message,
+    (SELECT created_at FROM messages m WHERE m.restaurant_id=$1 AND m.company_id=c.id ORDER BY m.created_at DESC LIMIT 1) AS last_at
+    FROM affiliations a JOIN companies c ON a.company_id=c.id WHERE a.restaurant_id=$1 ORDER BY last_at DESC NULLS LAST
+  `, [req.user.id]);
+  res.json(r.rows);
+});
+
+// ─── Company profile (logo)
+app.get('/api/admin/company-profile', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
+  const r = await pool.query('SELECT id, name, email, logo_url FROM companies WHERE id=$1', [companyId]);
+  res.json(r.rows[0] || {});
+});
+
+app.put('/api/admin/company-profile', companyOrAdminAuth, async (req, res) => {
+  const { logoUrl } = req.body;
+  const companyId = req.user.companyId || req.user.id;
+  try {
+    await pool.query('UPDATE companies SET logo_url=COALESCE($1,logo_url) WHERE id=$2', [logoUrl||null, companyId]);
+    res.json({ message: 'Logo mis à jour' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════
+//  CHANGEMENT DE MOT DE PASSE
+// ════════════════════════════════════════════════════════════════
+
+app.put('/api/restaurant/password', restaurantAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Champs requis' });
+  if (newPassword.length < 6) return res.status(400).json({ error: 'Minimum 6 caractères' });
+  try {
+    const r = await pool.query('SELECT password_hash FROM restaurants WHERE id=$1', [req.user.id]);
+    if (!await bcrypt.compare(currentPassword, r.rows[0].password_hash))
+      return res.status(401).json({ error: 'Mot de passe actuel incorrect' });
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE restaurants SET password_hash=$1 WHERE id=$2', [hash, req.user.id]);
+    res.json({ message: 'Mot de passe mis à jour' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/company/password', companyOrAdminAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Champs requis' });
+  if (newPassword.length < 6) return res.status(400).json({ error: 'Minimum 6 caractères' });
+  try {
+    const companyId = req.user.companyId || req.user.id;
+    // Vérification selon le rôle
+    if (req.user.role === 'admin') {
+      // L'admin vérifie avec le mot de passe admin global
+      if (currentPassword !== ADMIN_PASS)
+        return res.status(401).json({ error: 'Mot de passe actuel incorrect' });
+    } else {
+      const r = await pool.query('SELECT password_hash FROM companies WHERE id=$1', [companyId]);
+      if (!await bcrypt.compare(currentPassword, r.rows[0].password_hash))
+        return res.status(401).json({ error: 'Mot de passe actuel incorrect' });
+    }
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE companies SET password_hash=$1 WHERE id=$2', [hash, companyId]);
+    res.json({ message: 'Mot de passe mis à jour' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════
+//  RÉCUPÉRATION DE MOT DE PASSE (OTP)
+// ════════════════════════════════════════════════════════════════
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email, userType } = req.body;
+  if (!email || !userType) return res.status(400).json({ error: 'Champs requis' });
+  try {
+    let user;
+    if (userType === 'company') {
+      const r = await pool.query('SELECT id, name FROM companies WHERE email=$1', [email]);
+      user = r.rows[0];
+    } else if (userType === 'restaurant') {
+      const r = await pool.query('SELECT id, name FROM restaurants WHERE email=$1', [email]);
+      user = r.rows[0];
+    } else if (userType === 'employee') {
+      const r = await pool.query('SELECT id, first_name AS name FROM users WHERE email=$1', [email]);
+      user = r.rows[0];
+    }
+    if (!user) return res.status(404).json({ error: 'Aucun compte trouvé pour cet email' });
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    await pool.query('DELETE FROM password_resets WHERE email=$1 AND user_type=$2', [email, userType]);
+    await pool.query(
+      'INSERT INTO password_resets (email, user_type, otp_code, expires_at) VALUES ($1,$2,$3,$4)',
+      [email, userType, otp, expiresAt]
+    );
+    await sendMail(email, '🔑 Code de récupération FoodChooseApp',
+      `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;padding:40px;background:#FFF8F3;border-radius:12px;">
+        <h1 style="color:#E85A2A;font-size:28px;">🍽 FoodChooseApp</h1>
+        <h2 style="color:#2C1810;">Récupération de mot de passe</h2>
+        <p style="color:#4A3728;line-height:1.7">Bonjour <strong>${user.name}</strong>,<br>Voici votre code de vérification :</p>
+        <div style="background:#2C1810;border-radius:10px;padding:32px;text-align:center;margin:24px 0">
+          <p style="color:#F9C74F;font-size:11px;letter-spacing:2px;margin:0 0 12px;text-transform:uppercase">Code OTP</p>
+          <p style="color:#FFF8F3;font-size:42px;font-weight:700;font-family:monospace;letter-spacing:10px;margin:0">${otp}</p>
+        </div>
+        <p style="color:#4A3728;font-size:13px;">Ce code expire dans <strong>15 minutes</strong>. Ne le partagez jamais.</p>
+        <p style="color:#8B6554;font-size:13px;margin-top:24px;border-top:1px solid #F0E6DE;padding-top:16px">© FoodChooseApp — Plateforme de choix de repas</p>
+      </div>`
+    );
+    res.json({ message: 'Code envoyé par email' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/auth/verify-otp', async (req, res) => {
+  const { email, userType, otp } = req.body;
+  try {
+    const r = await pool.query(
+      'SELECT * FROM password_resets WHERE email=$1 AND user_type=$2 AND otp_code=$3 AND used=FALSE AND expires_at > NOW()',
+      [email, userType, otp]
+    );
+    if (!r.rows.length) return res.status(400).json({ error: 'Code invalide ou expiré' });
+    res.json({ valid: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { email, userType, otp, newPassword } = req.body;
+  if (!email || !userType || !otp || !newPassword) return res.status(400).json({ error: 'Champs requis' });
+  if (newPassword.length < 6) return res.status(400).json({ error: 'Minimum 6 caractères' });
+  try {
+    const r = await pool.query(
+      'SELECT * FROM password_resets WHERE email=$1 AND user_type=$2 AND otp_code=$3 AND used=FALSE AND expires_at > NOW()',
+      [email, userType, otp]
+    );
+    if (!r.rows.length) return res.status(400).json({ error: 'Code invalide ou expiré' });
+    const hash = await bcrypt.hash(newPassword, 10);
+    if (userType === 'company') await pool.query('UPDATE companies SET password_hash=$1 WHERE email=$2', [hash, email]);
+    else if (userType === 'restaurant') await pool.query('UPDATE restaurants SET password_hash=$1 WHERE email=$2', [hash, email]);
+    else if (userType === 'employee') await pool.query('UPDATE users SET password_hash=$1 WHERE email=$2', [hash, email]);
+    await pool.query('UPDATE password_resets SET used=TRUE WHERE email=$1 AND user_type=$2', [email, userType]);
+    res.json({ message: 'Mot de passe réinitialisé avec succès' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Static file serving ──────────────────────────────────────────
+app.get('/restaurant/register', (req, res) => res.sendFile(path.join(__dirname, '../public/restaurant/register.html')));
+app.get('/restaurant/login', (req, res) => res.sendFile(path.join(__dirname, '../public/restaurant/login.html')));
+app.get('/restaurant/dashboard', (req, res) => res.sendFile(path.join(__dirname, '../public/restaurant/dashboard.html')));
+app.get('/company/register', (req, res) => res.sendFile(path.join(__dirname, '../public/company/register.html')));
+app.get('/company/login', (req, res) => res.sendFile(path.join(__dirname, '../public/company/login.html')));
+app.get('/company/admin', (req, res) => res.sendFile(path.join(__dirname, '../public/company/admin.html')));
+app.get('/employee', (req, res) => res.sendFile(path.join(__dirname, '../public/employee/index.html')));
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
+
+// ════════════════════════════════════════════════════════════════
+//  RAPPELS QUOTIDIENS (Lun-Ven, 9h / 10h / 11h)
+// ════════════════════════════════════════════════════════════════
+cron.schedule('0 9,10,11 * * 1-5', async () => {
+  try {
+    const today = todayStr();
+    const result = await pool.query(`
+      SELECT u.id, u.email, u.first_name, u.last_name
+      FROM users u
+      WHERE NOT EXISTS (
+        SELECT 1 FROM orders o WHERE o.user_id = u.id AND o.order_date = $1
+      )
+    `, [today]);
+    for (const emp of result.rows) {
+      await sendMail(emp.email, '🍽 N\'oubliez pas votre repas du jour !',
+        `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;padding:40px;background:#FFF8F3;border-radius:12px;">
+          <h1 style="color:#E85A2A;font-size:28px;">🍽 FoodChooseApp</h1>
+          <h2 style="color:#2C1810;">Bonjour ${emp.first_name} !</h2>
+          <p style="color:#4A3728;line-height:1.7">Vous n'avez pas encore sélectionné votre repas d'aujourd'hui.<br>
+          Connectez-vous dès maintenant pour faire votre choix avant la clôture des commandes.</p>
+          <div style="text-align:center;margin:24px 0">
+            <div style="display:inline-block;background:#E85A2A;color:white;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px">🍽 Choisir mon repas</div>
+          </div>
+          <p style="color:#8B6554;font-size:13px;margin-top:24px;border-top:1px solid #F0E6DE;padding-top:16px">© FoodChooseApp — Plateforme de choix de repas</p>
+        </div>`
+      );
+    }
+    if (result.rows.length > 0) console.log(`📧 Rappels repas envoyés : ${result.rows.length} employé(s)`);
+  } catch(e) { console.error('Cron rappel error:', e.message); }
+}, { timezone: 'Africa/Abidjan' });
+
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => console.log(`🍽 FoodChooseApp → http://localhost:${PORT}`));
+}
+module.exports = app;

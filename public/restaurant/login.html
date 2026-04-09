@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>FoodChooseApp — Connexion Restaurant</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <style>
+    body{background:var(--brown);display:flex;align-items:center;justify-content:center;padding:20px;min-height:100vh}
+    .bg{position:fixed;inset:0;z-index:0;background:radial-gradient(circle at 25% 50%,rgba(232,90,42,.15),transparent 50%)}
+    .grid{position:fixed;inset:0;z-index:0;background-image:linear-gradient(rgba(255,248,243,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,248,243,.03) 1px,transparent 1px);background-size:40px 40px}
+    .auth-card{position:relative;z-index:1;background:var(--cream);border-radius:22px;padding:44px 40px;width:100%;max-width:420px;box-shadow:0 40px 80px rgba(0,0,0,.4);animation:cardIn .6s cubic-bezier(.16,1,.3,1) both}
+    @keyframes cardIn{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+    .auth-logo{text-align:center;margin-bottom:32px}
+    .auth-logo .icon{font-size:40px;display:block;margin-bottom:8px}
+    .auth-logo h1{font-family:'Playfair Display',serif;font-size:26px;font-weight:900;color:var(--brown)}
+    .auth-logo h1 span{color:var(--orange)}
+    .auth-logo p{font-size:13px;color:var(--muted);margin-top:4px}
+    #errMsg{background:#FEE2E2;color:#991B1B;border-radius:10px;padding:12px 14px;font-size:13px;margin-top:12px;display:none;border:1px solid #FCA5A5}
+    #errMsg.show{display:block}
+    .divider{border:none;border-top:1px solid var(--border);margin:22px 0 18px}
+    .hint{text-align:center;font-size:12px;color:var(--muted)}
+    .hint a{color:var(--orange)}
+    .back-link{text-align:center;margin-top:14px}
+    .back-link a{font-size:12.5px;color:var(--muted);text-decoration:none}
+    .back-link a:hover{color:var(--orange)}
+  </style>
+</head>
+<body>
+<div class="bg"></div><div class="grid"></div>
+<div id="toastContainer"></div>
+<div class="auth-card">
+  <div class="auth-logo">
+    <span class="icon">🏪</span>
+    <h1>Food<span>Choose</span>App</h1>
+    <p>Espace Restaurant</p>
+  </div>
+  <form id="loginForm">
+    <div class="form-group">
+      <label>Adresse email</label>
+      <input class="form-control" type="email" id="email" placeholder="restaurant@email.com" required>
+    </div>
+    <div class="form-group">
+      <label>Mot de passe</label>
+      <div class="pw-wrap">
+        <input class="form-control" type="password" id="password" placeholder="Votre mot de passe" required>
+        <button class="pw-toggle" type="button">👁</button>
+      </div>
+    </div>
+    <button class="btn btn-primary" type="submit" id="loginBtn" style="width:100%;margin-top:8px;padding:14px">
+      Se connecter
+    </button>
+    <div id="errMsg"></div>
+  </form>
+  <p style="text-align:center;margin-top:8px;font-size:13px">
+    <a href="#" style="color:var(--orange)" onclick="openForgotModal('restaurant')">Mot de passe oublié ?</a>
+  </p>
+  <hr class="divider">
+  <p class="hint">Pas encore de compte ? <a href="/restaurant/register">S'inscrire</a></p>
+  <div class="back-link"><a href="/">← Retour à l'accueil</a></div>
+</div>
+
+<!-- FORGOT PASSWORD MODAL -->
+<div id="forgotModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;align-items:center;justify-content:center">
+  <div style="background:var(--cream);border-radius:18px;padding:32px;width:100%;max-width:400px;margin:20px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <h3 style="font-family:'Playfair Display',serif;color:var(--brown);margin-bottom:6px">🔑 Mot de passe oublié</h3>
+    <div id="fp-step1"><p style="font-size:13px;color:var(--muted);margin-bottom:16px">Entrez votre email pour recevoir un code OTP.</p><div class="form-group"><label>Email</label><input class="form-control" id="fp-email" type="email" placeholder="votre@email.com"></div><div id="fp-err" style="color:#dc2626;font-size:13px;margin-bottom:10px;display:none"></div><button class="btn btn-primary" style="width:100%" onclick="fpSendOtp()">📧 Envoyer le code</button></div>
+    <div id="fp-step2" style="display:none"><p style="font-size:13px;color:var(--muted);margin-bottom:16px">Entrez le code à 6 chiffres reçu par email.</p><div class="form-group"><label>Code OTP</label><input class="form-control" id="fp-otp" placeholder="000000" maxlength="6" style="letter-spacing:6px;font-size:22px;text-align:center;font-family:monospace"></div><div id="fp-err2" style="color:#dc2626;font-size:13px;margin-bottom:10px;display:none"></div><button class="btn btn-primary" style="width:100%" onclick="fpVerifyOtp()">✅ Vérifier le code</button></div>
+    <div id="fp-step3" style="display:none"><p style="font-size:13px;color:var(--muted);margin-bottom:16px">Définissez votre nouveau mot de passe.</p><div class="form-group"><label>Nouveau mot de passe</label><div class="pw-wrap"><input class="form-control" type="password" id="fp-pwd" placeholder="Minimum 6 caractères"><button class="pw-toggle" type="button">👁</button></div></div><div class="form-group"><label>Confirmer</label><div class="pw-wrap"><input class="form-control" type="password" id="fp-pwd2" placeholder="Répétez"><button class="pw-toggle" type="button">👁</button></div></div><div id="fp-err3" style="color:#dc2626;font-size:13px;margin-bottom:10px;display:none"></div><button class="btn btn-primary" style="width:100%" onclick="fpResetPassword()">🔐 Changer le mot de passe</button></div>
+    <button onclick="closeForgotModal()" style="width:100%;margin-top:12px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px">Annuler</button>
+  </div>
+</div>
+
+<script src="/assets/js/utils.js"></script>
+<script>
+if (localStorage.getItem('fc_role') === 'restaurant') window.location.href = '/restaurant/dashboard';
+initPasswordToggles();
+let _fpType = 'restaurant';
+function openForgotModal(type) { _fpType=type; ['fp-step1','fp-step2','fp-step3'].forEach((id,i)=>document.getElementById(id).style.display=i===0?'block':'none'); ['fp-err','fp-err2','fp-err3'].forEach(id=>{const el=document.getElementById(id);el.style.display='none';el.textContent='';}); document.getElementById('fp-email').value=''; document.getElementById('fp-otp').value=''; document.getElementById('fp-pwd').value=''; document.getElementById('fp-pwd2').value=''; const m=document.getElementById('forgotModal'); m.style.display='flex'; initPasswordToggles(); }
+function closeForgotModal() { document.getElementById('forgotModal').style.display='none'; }
+async function fpSendOtp() { const email=document.getElementById('fp-email').value.trim(); const errEl=document.getElementById('fp-err'); errEl.style.display='none'; if(!email){errEl.textContent='Email requis';errEl.style.display='block';return;} try{ await apiFetch('/api/auth/forgot-password',{method:'POST',body:JSON.stringify({email,userType:_fpType})}); document.getElementById('fp-step1').style.display='none'; document.getElementById('fp-step2').style.display='block'; toast('Code envoyé !','success'); }catch(e){errEl.textContent=e.message;errEl.style.display='block';} }
+async function fpVerifyOtp() { const email=document.getElementById('fp-email').value.trim(); const otp=document.getElementById('fp-otp').value.trim(); const errEl=document.getElementById('fp-err2'); errEl.style.display='none'; if(otp.length!==6){errEl.textContent='Code à 6 chiffres requis';errEl.style.display='block';return;} try{ await apiFetch('/api/auth/verify-otp',{method:'POST',body:JSON.stringify({email,userType:_fpType,otp})}); document.getElementById('fp-step2').style.display='none'; document.getElementById('fp-step3').style.display='block'; }catch(e){errEl.textContent=e.message;errEl.style.display='block';} }
+async function fpResetPassword() { const email=document.getElementById('fp-email').value.trim(); const otp=document.getElementById('fp-otp').value.trim(); const pwd=document.getElementById('fp-pwd').value; const pwd2=document.getElementById('fp-pwd2').value; const errEl=document.getElementById('fp-err3'); errEl.style.display='none'; if(pwd!==pwd2){errEl.textContent='Les mots de passe ne correspondent pas';errEl.style.display='block';return;} if(pwd.length<6){errEl.textContent='Minimum 6 caractères';errEl.style.display='block';return;} try{ await apiFetch('/api/auth/reset-password',{method:'POST',body:JSON.stringify({email,userType:_fpType,otp,newPassword:pwd})}); toast('Mot de passe changé ! Connectez-vous.','success'); closeForgotModal(); }catch(e){errEl.textContent=e.message;errEl.style.display='block';} }
+
+document.getElementById('loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  const err = document.getElementById('errMsg');
+  btn.disabled = true; btn.textContent = '⏳ Connexion...';
+  err.classList.remove('show');
+  try {
+    const data = await apiFetch('/api/auth/restaurant/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: document.getElementById('email').value, password: document.getElementById('password').value })
+    });
+    localStorage.setItem('fc_token', data.token);
+    localStorage.setItem('fc_role', 'restaurant');
+    localStorage.setItem('fc_name', data.name);
+    localStorage.setItem('fc_id', data.id);
+    window.location.href = '/restaurant/dashboard';
+  } catch(e2) {
+    err.textContent = e2.message; err.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Se connecter';
+  }
+});
+</script>
+</body>
+</html>

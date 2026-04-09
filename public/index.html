@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FoodChooseApp</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--orange:#E85A2A;--brown:#2C1810;--cream:#FFF8F3;--muted:#8B6554;--border:#F0E6DE}
+    body{font-family:'DM Sans',sans-serif;background:var(--brown);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;padding:20px}
+    .bg{position:fixed;inset:0;z-index:0;background:radial-gradient(circle at 20% 50%,rgba(232,90,42,.18) 0%,transparent 50%),radial-gradient(circle at 80% 20%,rgba(249,199,79,.07) 0%,transparent 40%)}
+    .grid{position:fixed;inset:0;z-index:0;background-image:linear-gradient(rgba(255,248,243,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,248,243,.03) 1px,transparent 1px);background-size:40px 40px}
+    .container{position:relative;z-index:1;width:100%;max-width:900px;animation:fadeUp .7s ease both}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    .hero{text-align:center;margin-bottom:48px}
+    .hero-logo{font-size:48px;margin-bottom:16px}
+    .hero-title{font-family:'Playfair Display',serif;font-size:42px;font-weight:900;color:var(--cream);letter-spacing:-1px;line-height:1.1}
+    .hero-title span{color:var(--orange)}
+    .hero-sub{color:rgba(255,248,243,.55);font-size:16px;margin-top:12px}
+    .portals{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    .portal{background:rgba(255,248,243,.06);border:1.5px solid rgba(255,248,243,.1);border-radius:20px;padding:32px 24px;text-align:center;cursor:pointer;transition:all .3s;text-decoration:none;display:flex;flex-direction:column;align-items:center}
+    .portal:hover{background:rgba(255,248,243,.1);border-color:var(--orange);transform:translateY(-4px);box-shadow:0 20px 40px rgba(0,0,0,.3)}
+    .portal-icon{font-size:40px;margin-bottom:14px;display:block}
+    .portal-title{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--cream);margin-bottom:8px}
+    .portal-desc{font-size:13px;color:rgba(255,248,243,.5);line-height:1.6;margin-bottom:18px;flex:1}
+    .portal-actions{display:flex;flex-direction:column;gap:8px;width:100%}
+    .portal-btn{display:block;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;text-decoration:none;transition:all .2s;text-align:center}
+    .btn-solid{background:var(--orange);color:white}
+    .btn-solid:hover{background:#D14D22}
+    .btn-ghost{background:rgba(255,248,243,.08);color:rgba(255,248,243,.7);border:1px solid rgba(255,248,243,.15)}
+    .btn-ghost:hover{background:rgba(255,248,243,.15);color:var(--cream)}
+    .footer{margin-top:40px;text-align:center;color:rgba(255,248,243,.25);font-size:12px}
+    @media(max-width:700px){.portals{grid-template-columns:1fr}.hero-title{font-size:30px}.portal{padding:24px 18px}}
+  </style>
+</head>
+<body>
+  <div class="bg"></div><div class="grid"></div>
+  <div class="container">
+    <div class="hero">
+      <div class="hero-logo">🍽</div>
+      <h1 class="hero-title">Food<span>Choose</span>App</h1>
+      <p class="hero-sub">La plateforme intelligente de gestion des repas d'entreprise</p>
+    </div>
+    <div class="portals">
+      <div class="portal">
+        <span class="portal-icon">🏪</span>
+        <div class="portal-title">Restaurant</div>
+        <p class="portal-desc">Gérez vos menus, recevez des commandes d'entreprises et suivez vos performances.</p>
+        <div class="portal-actions">
+          <a href="/restaurant/login" class="portal-btn btn-solid">Se connecter</a>
+          <a href="/restaurant/register" class="portal-btn btn-ghost">Créer un compte</a>
+        </div>
+      </div>
+      <div class="portal">
+        <span class="portal-icon">🏢</span>
+        <div class="portal-title">Entreprise / Admin</div>
+        <p class="portal-desc">Affiliez votre entreprise à des restaurants, gérez les commandes de vos employés.</p>
+        <div class="portal-actions">
+          <a href="/company/login" class="portal-btn btn-solid">Se connecter</a>
+          <a href="/company/register" class="portal-btn btn-ghost">Créer un compte</a>
+        </div>
+      </div>
+      <div class="portal">
+        <span class="portal-icon">👤</span>
+        <div class="portal-title">Employé</div>
+        <p class="portal-desc">Choisissez votre repas de midi parmi les restaurants affiliés à votre entreprise.</p>
+        <div class="portal-actions">
+          <a href="/employee" class="portal-btn btn-solid">Se connecter</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer">© 2024 FoodChooseApp — Tous droits réservés</div>
+  </div>
+  <script>
+    // Auto-redirect if already logged in
+    const role = localStorage.getItem('fc_role');
+    if (role === 'restaurant') window.location.href = '/restaurant/dashboard';
+    else if (role === 'admin') window.location.href = '/company/admin';
+    else if (role === 'company') window.location.href = '/company/admin';
+    else if (role === 'employee') window.location.href = '/employee';
+  </script>
+</body>
+</html>
