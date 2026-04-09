@@ -8,8 +8,8 @@
   --border: #F0E6DE; --success: #16a34a; --danger: #dc2626;
   --info: #2563eb; --sidebar-w: 250px;
 }
-html { font-size: 16px; }
-body { font-family: 'DM Sans', sans-serif; background: #F5EDE6; color: var(--text); min-height: 100vh; }
+html { font-size: 16px; overflow-x: hidden; scroll-behavior: smooth; }
+body { font-family: 'DM Sans', sans-serif; background: #F5EDE6; color: var(--text); min-height: 100vh; overflow-x: hidden; }
 
 /* ─── Layout ─────────────────────────────────────────── */
 .app-layout { display: flex; min-height: 100vh; }
@@ -21,7 +21,7 @@ body { font-family: 'DM Sans', sans-serif; background: #F5EDE6; color: var(--tex
   transition: transform .3s cubic-bezier(.16,1,.3,1);
 }
 .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 199; }
-.main { margin-left: var(--sidebar-w); flex: 1; min-height: 100vh; }
+.main { margin-left: var(--sidebar-w); flex: 1; min-height: 100vh; overflow-x: hidden; }
 .topbar {
   background: var(--cream); padding: 14px 24px; display: flex;
   align-items: center; justify-content: space-between;
@@ -187,6 +187,18 @@ tr:hover td { background: rgba(232,90,42,.02); }
 .notif-msg { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .notif-time { font-size: 10px; color: var(--muted); margin-top: 4px; }
 
+/* ─── Scroll to top ──────────────────────────────────── */
+#scrollTopBtn {
+  position: fixed; bottom: 24px; right: 20px; z-index: 999;
+  width: 42px; height: 42px; border-radius: 50%;
+  background: var(--orange); color: white; border: none;
+  font-size: 18px; cursor: pointer; display: none; align-items: center;
+  justify-content: center; box-shadow: 0 4px 16px rgba(232,90,42,.4);
+  transition: all .2s;
+}
+#scrollTopBtn.visible { display: flex; animation: fadeIn .2s ease; }
+#scrollTopBtn:hover { background: #D14D22; transform: translateY(-2px); }
+
 /* ─── Toast ──────────────────────────────────────────── */
 #toastContainer { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 7px; }
 .toast { background: var(--brown); color: var(--cream); padding: 12px 18px; border-radius: 10px; font-size: 13.5px; max-width: 300px; animation: toastIn .3s ease both; box-shadow: 0 8px 24px rgba(0,0,0,.25); display: flex; align-items: center; gap: 8px; }
@@ -267,6 +279,13 @@ tr:hover td { background: rgba(232,90,42,.02); }
   .topbar-title { font-size: 17px; }
   .notif-dropdown { width: calc(100vw - 32px); right: -60px; }
   .modal { max-height: 85vh; }
+  /* Inputs à largeur fixe → pleine largeur sur mobile */
+  .form-control[style*="width"] { width: 100% !important; }
+  input.form-control, select.form-control { max-width: 100%; }
+  /* Chat layout mobile */
+  .chat-layout { height: auto; min-height: 60vh; }
+  /* Tables */
+  .table-wrap { -webkit-overflow-scrolling: touch; }
 }
 @media (max-width: 480px) {
   .stats-grid { grid-template-columns: 1fr 1fr; }

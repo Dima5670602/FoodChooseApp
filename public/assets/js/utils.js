@@ -167,6 +167,19 @@ function readFileAsBase64(file) {
   });
 }
 
+// ─── Scroll to top ────────────────────────────────────
+(function() {
+  const btn = document.createElement('button');
+  btn.id = 'scrollTopBtn';
+  btn.title = 'Remonter';
+  btn.innerHTML = '↑';
+  document.body.appendChild(btn);
+  window.addEventListener('scroll', () => {
+    btn.classList.toggle('visible', window.scrollY > 300);
+  }, { passive: true });
+  btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+})();
+
 // ─── Password visibility toggle ───────────────────────
 function initPasswordToggles() {
   document.querySelectorAll('.pw-toggle:not([data-pw-init])').forEach(btn => {
