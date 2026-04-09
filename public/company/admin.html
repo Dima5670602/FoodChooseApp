@@ -436,7 +436,7 @@ function renderRestGrid(containerId, list) {
 async function openRestDetail(restId) {
   try {
     const data = await apiFetch(`/api/admin/restaurants/${restId}/menus`, {}, token);
-    const rest = data.restaurant;
+    const rest = data.restaurant || {};
     const menus = data.menus || [];
     currentDetailRestId = restId;
     const affiliated = allRestaurants.find(r=>r.id===restId)?.affiliated || false;
@@ -681,8 +681,10 @@ async function createEmployee() {
 
 async function deleteEmployee(id, name) {
   if (!confirm(`Supprimer l'employé ${name} ?`)) return;
-  await apiFetch(`/api/admin/employees/${id}`, { method: 'DELETE' }, token);
-  toast('Employé supprimé', 'info'); loadEmployees();
+  try {
+    await apiFetch(`/api/admin/employees/${id}`, { method: 'DELETE' }, token);
+    toast('Employé supprimé', 'info'); loadEmployees();
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 // ── Expenses ──────────────────────────────────────────

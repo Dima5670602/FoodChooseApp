@@ -589,28 +589,31 @@ app.get('/api/messages/unread-count', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 //  ADMIN ROUTES
 // ════════════════════════════════════════════════════════════════
-app.get('/api/admin/all-restaurants', adminAuth, async (req, res) => {
+app.get('/api/admin/all-restaurants', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
   const r = await pool.query(`
     SELECT r.id, r.name, r.address, r.location, r.phone, r.specialties, r.photo_url,
     EXISTS(SELECT 1 FROM affiliations a WHERE a.company_id=$1 AND a.restaurant_id=r.id) AS affiliated,
     (SELECT COUNT(*) FROM menus m WHERE m.restaurant_id=r.id AND m.available=TRUE) AS menu_count
     FROM restaurants r ORDER BY r.name
-  `, [req.user.companyId]);
+  `, [companyId]);
   res.json(r.rows);
 });
 
-app.get('/api/admin/restaurants/:id/menus', adminAuth, async (req, res) => {
+app.get('/api/admin/restaurants/:id/menus', companyOrAdminAuth, async (req, res) => {
   const r = await pool.query('SELECT * FROM menus WHERE restaurant_id=$1 AND available=TRUE ORDER BY category,name', [req.params.id]);
   const rest = await pool.query('SELECT name,address,specialties,photo_url FROM restaurants WHERE id=$1', [req.params.id]);
+  if (!rest.rows.length) return res.status(404).json({ error: 'Restaurant introuvable' });
   res.json({ restaurant: rest.rows[0], menus: r.rows });
 });
 
-app.post('/api/admin/affiliations', adminAuth, async (req, res) => {
+app.post('/api/admin/affiliations', companyOrAdminAuth, async (req, res) => {
   const { restaurantId } = req.body;
+  const companyId = req.user.companyId || req.user.id;
   try {
-    await pool.query('INSERT INTO affiliations (company_id,restaurant_id) VALUES ($1,$2)', [req.user.companyId, restaurantId]);
+    await pool.query('INSERT INTO affiliations (company_id,restaurant_id) VALUES ($1,$2)', [companyId, restaurantId]);
     const rest = await pool.query('SELECT name FROM restaurants WHERE id=$1', [restaurantId]);
-    await createNotification('restaurant', restaurantId, '🤝 Nouvelle affiliation', `L'entreprise souhaite s'affilier à votre restaurant`, 'affiliation', { companyId: req.user.companyId });
+    await createNotification('restaurant', restaurantId, '🤝 Nouvelle affiliation', `L'entreprise souhaite s'affilier à votre restaurant`, 'affiliation', { companyId });
     res.json({ message: 'Affiliation créée' });
   } catch (e) {
     if (e.code==='23505') return res.status(400).json({ error: 'Déjà affilié' });
@@ -618,18 +621,20 @@ app.post('/api/admin/affiliations', adminAuth, async (req, res) => {
   }
 });
 
-app.delete('/api/admin/affiliations/:restaurantId', adminAuth, async (req, res) => {
-  await pool.query('DELETE FROM affiliations WHERE company_id=$1 AND restaurant_id=$2', [req.user.companyId, req.params.restaurantId]);
+app.delete('/api/admin/affiliations/:restaurantId', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
+  await pool.query('DELETE FROM affiliations WHERE company_id=$1 AND restaurant_id=$2', [companyId, req.params.restaurantId]);
   res.json({ message: 'Affiliation supprimée' });
 });
 
-app.get('/api/admin/affiliations', adminAuth, async (req, res) => {
+app.get('/api/admin/affiliations', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
   const r = await pool.query(`
     SELECT r.id,r.name,r.address,r.specialties,r.photo_url,a.created_at AS affiliated_at,
     (SELECT COUNT(*) FROM menus m WHERE m.restaurant_id=r.id AND m.available=TRUE) AS menu_count
     FROM affiliations a JOIN restaurants r ON a.restaurant_id=r.id
     WHERE a.company_id=$1 ORDER BY r.name
-  `, [req.user.companyId]);
+  `, [companyId]);
   res.json(r.rows);
 });
 
@@ -683,35 +688,37 @@ app.delete('/api/admin/employees/:id', companyOrAdminAuth, async (req, res) => {
   res.json({ message: 'Employé supprimé' });
 });
 
-app.get('/api/admin/orders', adminAuth, async (req, res) => {
+app.get('/api/admin/orders', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
   const { date, restaurantId } = req.query;
   const d = date || todayStr();
   let q = `SELECT o.*,u.first_name,u.last_name,u.employee_id,m.name AS menu_name,m.price,r.name AS restaurant_name
     FROM orders o JOIN users u ON o.user_id=u.id JOIN menus m ON o.menu_id=m.id JOIN restaurants r ON o.restaurant_id=r.id
     WHERE o.company_id=$1 AND o.order_date=$2`;
-  const params = [req.user.companyId, d];
+  const params = [companyId, d];
   if (restaurantId) { q += ` AND o.restaurant_id=$3`; params.push(restaurantId); }
   q += ' ORDER BY r.name,u.last_name';
   const r = await pool.query(q, params);
   res.json(r.rows);
 });
 
-app.post('/api/admin/orders/validate', adminAuth, async (req, res) => {
+app.post('/api/admin/orders/validate', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
   const { date, restaurantId } = req.body;
   const d = date || todayStr();
   try {
     const r = await pool.query(
       "UPDATE orders SET status='validated_by_admin', updated_at=NOW() WHERE company_id=$1 AND order_date=$2 AND status='pending' AND ($3::integer IS NULL OR restaurant_id=$3) RETURNING restaurant_id",
-      [req.user.companyId, d, restaurantId||null]
+      [companyId, d, restaurantId||null]
     );
     const restaurantIds = [...new Set(r.rows.map(o => o.restaurant_id))];
-    const coName = req.user.name.replace('Admin – ', '');
+    const coName = (req.user.name || '').replace('Admin – ', '');
     for (const rid of restaurantIds) {
       await pool.query(
         'INSERT INTO order_batches (company_id,restaurant_id,batch_date,status) VALUES ($1,$2,$3,\'pending\') ON CONFLICT (company_id,restaurant_id,batch_date) DO UPDATE SET status=\'pending\'',
-        [req.user.companyId, rid, d]
+        [companyId, rid, d]
       );
-      await createNotification('restaurant', rid, '🛒 Nouvelle commande', `Commande de ${coName} pour le ${d}`, 'order', { companyId: req.user.companyId, date: d });
+      await createNotification('restaurant', rid, '🛒 Nouvelle commande', `Commande de ${coName} pour le ${d}`, 'order', { companyId, date: d });
       const rest = await pool.query('SELECT email,name FROM restaurants WHERE id=$1', [rid]);
       if (rest.rows.length) sendMail(rest.rows[0].email, `🛒 Nouvelle commande — ${coName}`, `<div style="font-family:Georgia;padding:40px;background:#FFF8F3"><h1 style="color:#E85A2A">🍽 FoodChooseApp</h1><p><strong>${coName}</strong> a passé une commande pour le ${d}. Connectez-vous pour confirmer et envoyer la facture.</p></div>`).catch(err => console.error('Email commande:', err));
     }
@@ -719,17 +726,19 @@ app.post('/api/admin/orders/validate', adminAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/admin/invoices', adminAuth, async (req, res) => {
+app.get('/api/admin/invoices', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
   const r = await pool.query(`
     SELECT i.*,r.name AS restaurant_name FROM invoices i JOIN restaurants r ON i.restaurant_id=r.id
     WHERE i.company_id=$1 ORDER BY i.created_at DESC
-  `, [req.user.companyId]);
+  `, [companyId]);
   res.json(r.rows);
 });
 
-app.get('/api/admin/invoices/:id/pdf', adminAuth, async (req, res) => {
+app.get('/api/admin/invoices/:id/pdf', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
   try {
-    const inv = await pool.query(`SELECT i.*,r.name AS restaurant_name,r.address AS restaurant_address,c.name AS company_name FROM invoices i JOIN restaurants r ON i.restaurant_id=r.id JOIN companies c ON i.company_id=c.id WHERE i.id=$1 AND i.company_id=$2`, [req.params.id, req.user.companyId]);
+    const inv = await pool.query(`SELECT i.*,r.name AS restaurant_name,r.address AS restaurant_address,c.name AS company_name FROM invoices i JOIN restaurants r ON i.restaurant_id=r.id JOIN companies c ON i.company_id=c.id WHERE i.id=$1 AND i.company_id=$2`, [req.params.id, companyId]);
     if (!inv.rows.length) return res.status(404).json({ error: 'Facture introuvable' });
     const inv_data = inv.rows[0];
     const items = Array.isArray(inv_data.items) ? inv_data.items : JSON.parse(inv_data.items||'[]');
@@ -765,10 +774,11 @@ app.get('/api/admin/invoices/:id/pdf', adminAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/admin/history', adminAuth, async (req, res) => {
+app.get('/api/admin/history', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
   const { from, to, employeeId } = req.query;
   let q = 'SELECT * FROM order_history WHERE company_id=$1';
-  const params = [req.user.companyId];
+  const params = [companyId];
   if (from) { params.push(from); q += ` AND order_date>=$${params.length}`; }
   if (to) { params.push(to); q += ` AND order_date<=$${params.length}`; }
   if (employeeId) { params.push(employeeId); q += ` AND employee_id=$${params.length}`; }
@@ -777,17 +787,19 @@ app.get('/api/admin/history', adminAuth, async (req, res) => {
   res.json(r.rows);
 });
 
-app.get('/api/admin/stats', adminAuth, async (req, res) => {
+app.get('/api/admin/stats', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
   try {
-    const empCount = await pool.query('SELECT COUNT(*) FROM users WHERE company_id=$1', [req.user.companyId]);
-    const affCount = await pool.query('SELECT COUNT(*) FROM affiliations WHERE company_id=$1', [req.user.companyId]);
-    const todayOrders = await pool.query("SELECT COUNT(*) FROM orders WHERE company_id=$1 AND order_date=CURRENT_DATE", [req.user.companyId]);
-    const pendingOrders = await pool.query("SELECT COUNT(*) FROM orders WHERE company_id=$1 AND order_date=CURRENT_DATE AND status='pending'", [req.user.companyId]);
+    const empCount = await pool.query('SELECT COUNT(*) FROM users WHERE company_id=$1', [companyId]);
+    const affCount = await pool.query('SELECT COUNT(*) FROM affiliations WHERE company_id=$1', [companyId]);
+    const todayOrders = await pool.query("SELECT COUNT(*) FROM orders WHERE company_id=$1 AND order_date=CURRENT_DATE", [companyId]);
+    const pendingOrders = await pool.query("SELECT COUNT(*) FROM orders WHERE company_id=$1 AND order_date=CURRENT_DATE AND status='pending'", [companyId]);
     res.json({ employees: parseInt(empCount.rows[0].count), affiliations: parseInt(affCount.rows[0].count), todayOrders: parseInt(todayOrders.rows[0].count), pendingOrders: parseInt(pendingOrders.rows[0].count) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/admin/expenses', adminAuth, async (req, res) => {
+app.get('/api/admin/expenses', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
   const { period } = req.query;
   let groupBy = "to_char(o.order_date,'YYYY-MM-DD')";
   let whereDate = "o.order_date >= CURRENT_DATE - 7";
@@ -799,13 +811,14 @@ app.get('/api/admin/expenses', adminAuth, async (req, res) => {
       FROM orders o JOIN menus m ON o.menu_id=m.id
       WHERE o.company_id=$1 AND ${whereDate}
       GROUP BY ${groupBy} ORDER BY period
-    `, [req.user.companyId]);
-    const totalMonth = await pool.query("SELECT COALESCE(SUM(m.price),0) AS total FROM orders o JOIN menus m ON o.menu_id=m.id WHERE o.company_id=$1 AND o.order_date>=date_trunc('month',CURRENT_DATE)", [req.user.companyId]);
+    `, [companyId]);
+    const totalMonth = await pool.query("SELECT COALESCE(SUM(m.price),0) AS total FROM orders o JOIN menus m ON o.menu_id=m.id WHERE o.company_id=$1 AND o.order_date>=date_trunc('month',CURRENT_DATE)", [companyId]);
     res.json({ series: r.rows, totalMonth: parseFloat(totalMonth.rows[0].total) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/admin/export-pdf', adminAuth, async (req, res) => {
+app.get('/api/admin/export-pdf', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
   const { date } = req.query;
   const d = date || todayStr();
   try {
@@ -813,8 +826,8 @@ app.get('/api/admin/export-pdf', adminAuth, async (req, res) => {
       SELECT o.*,u.first_name,u.last_name,m.name AS menu_name,m.price,r.name AS restaurant_name,o.drink_preference
       FROM orders o JOIN users u ON o.user_id=u.id JOIN menus m ON o.menu_id=m.id JOIN restaurants r ON o.restaurant_id=r.id
       WHERE o.company_id=$1 AND o.order_date=$2 ORDER BY r.name,u.last_name
-    `, [req.user.companyId, d]);
-    const coName = req.user.name.replace('Admin – ','');
+    `, [companyId, d]);
+    const coName = (req.user.name || '').replace('Admin – ','');
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     res.setHeader('Content-Type','application/pdf');
     res.setHeader('Content-Disposition',`attachment; filename="commandes_${d}.pdf"`);
@@ -846,14 +859,15 @@ app.get('/api/admin/export-pdf', adminAuth, async (req, res) => {
   } catch(e){ res.status(500).json({error:e.message}); }
 });
 
-app.get('/api/admin/conversations', adminAuth, async (req, res) => {
+app.get('/api/admin/conversations', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
   const r = await pool.query(`
     SELECT r.id AS restaurant_id, r.name AS restaurant_name, r.photo_url,
     (SELECT COUNT(*) FROM messages m WHERE m.company_id=$1 AND m.restaurant_id=r.id AND m.read_by_company=FALSE AND m.sender_type='restaurant') AS unread,
     (SELECT content FROM messages m WHERE m.company_id=$1 AND m.restaurant_id=r.id ORDER BY m.created_at DESC LIMIT 1) AS last_message,
     (SELECT created_at FROM messages m WHERE m.company_id=$1 AND m.restaurant_id=r.id ORDER BY m.created_at DESC LIMIT 1) AS last_at
     FROM affiliations a JOIN restaurants r ON a.restaurant_id=r.id WHERE a.company_id=$1 ORDER BY last_at DESC NULLS LAST
-  `, [req.user.companyId]);
+  `, [companyId]);
   res.json(r.rows);
 });
 
