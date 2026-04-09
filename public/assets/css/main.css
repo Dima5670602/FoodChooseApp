@@ -69,6 +69,8 @@ body { font-family: 'DM Sans', sans-serif; background: #F5EDE6; color: var(--tex
 .user-role { font-size: 11px; color: var(--muted); }
 .btn-logout { width: 100%; padding: 8px; background: rgba(232,90,42,.15); border: 1px solid rgba(232,90,42,.3); color: var(--orange); border-radius: 8px; cursor: pointer; font-size: 12.5px; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: all .2s; }
 .btn-logout:hover { background: rgba(232,90,42,.25); }
+.btn-topbar-logout { background: rgba(232,90,42,.15); border: 1px solid rgba(232,90,42,.3); color: var(--orange); border-radius: 8px; padding: 7px 13px; font-size: 13px; font-weight: 500; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all .2s; white-space: nowrap; }
+.btn-topbar-logout:hover { background: rgba(232,90,42,.3); }
 
 /* ─── Pages ──────────────────────────────────────────── */
 .page { display: none; }
