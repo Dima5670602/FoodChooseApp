@@ -1,234 +1,422 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+  <!-- ═══════════════════════════════════════════════════════════════
+       MÉTADONNÉES ET RESSOURCES EXTERNES
+       Encodage UTF-8, viewport responsive, titre de page
+  ═══════════════════════════════════════════════════════════════ -->
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>FoodChooseApp — Espace Employé</title>
+
+  <!-- Polices Google : Playfair Display (titres) + DM Sans (corps de texte) -->
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Feuille de style principale partagée par toute l'application -->
   <link rel="stylesheet" href="/assets/css/main.css">
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       STYLES LOCAUX SPÉCIFIQUES À LA PAGE EMPLOYÉ
+       Complètent main.css avec des composants propres à cet écran
+  ═══════════════════════════════════════════════════════════════ -->
   <style>
+    /* Écran de connexion : couvre toute la fenêtre, fond marron */
     .login-screen{position:fixed;inset:0;background:var(--brown);display:flex;align-items:center;justify-content:center;padding:20px;z-index:1000}
+    /* Décoration de fond : dégradé radial orangé subtil */
     .bg-deco{position:fixed;inset:0;z-index:0;background:radial-gradient(circle at 30% 50%,rgba(232,90,42,.12),transparent 50%)}
+    /* Grille décorative en arrière-plan de l'écran de login */
     .grid{position:fixed;inset:0;z-index:0;background-image:linear-gradient(rgba(255,248,243,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,248,243,.03) 1px,transparent 1px);background-size:40px 40px}
+    /* Carte de formulaire d'authentification avec animation d'entrée */
     .auth-card{position:relative;z-index:1;background:var(--cream);border-radius:22px;padding:40px;width:100%;max-width:420px;box-shadow:0 40px 80px rgba(0,0,0,.4);animation:cardIn .6s cubic-bezier(.16,1,.3,1) both}
+    /* Animation : la carte monte légèrement depuis le bas */
     @keyframes cardIn{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+    /* Logo dans la carte d'authentification */
     .auth-logo{text-align:center;margin-bottom:28px}
     .auth-logo .icon{font-size:38px;display:block;margin-bottom:8px}
     .auth-logo h1{font-family:'Playfair Display',serif;font-size:26px;font-weight:900;color:var(--brown)}
     .auth-logo h1 span{color:var(--orange)}
+    /* Bloc d'erreur de connexion : rouge discret, caché par défaut */
     #loginErr{background:#FEE2E2;color:#991B1B;border-radius:10px;padding:12px 14px;font-size:13px;margin-top:10px;display:none;border:1px solid #FCA5A5}
+    /* Classe .show rend visible le bloc d'erreur */
     #loginErr.show{display:block}
-    /* Restaurant list */
+    /* Grille des restaurants : 3 colonnes par défaut */
     .rest-list{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    /* Bouton/carte cliquable représentant un restaurant */
     .rest-btn{display:flex;flex-direction:column;align-items:center;padding:18px 14px;background:var(--cream);border:2px solid var(--border);border-radius:14px;cursor:pointer;transition:all .2s;text-align:center;text-decoration:none}
+    /* Survol et état actif d'un restaurant sélectionné */
     .rest-btn:hover,.rest-btn.active{border-color:var(--orange);background:#FFF0EA;transform:translateY(-2px)}
-    /* Menu grid */
+    /* Grille des menus : 3 colonnes */
     .menu-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    /* Responsive tablette : 2 colonnes pour restaurants et menus */
     @media(max-width:700px){.rest-list{grid-template-columns:repeat(2,1fr)}.menu-grid{grid-template-columns:repeat(2,1fr)}}
+    /* Responsive mobile : 1 colonne */
     @media(max-width:480px){.rest-list{grid-template-columns:1fr}.menu-grid{grid-template-columns:1fr}}
-    /* History item */
+    /* Ligne d'un item d'historique de commandes */
     .hist-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+    /* Icône de gauche dans chaque item historique */
     .hist-icon{width:38px;height:38px;border-radius:10px;background:var(--orange);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
   </style>
 </head>
 <body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     CONTENEUR DES NOTIFICATIONS TOAST
+     Les messages flash (succès, erreur, info) s'injectent ici
+     via la fonction toast() définie dans utils.js
+═══════════════════════════════════════════════════════════════ -->
 <div id="toastContainer"></div>
 
-<!-- LOGIN SCREEN -->
+<!-- ═══════════════════════════════════════════════════════════════
+     ÉCRAN DE CONNEXION EMPLOYÉ
+     Affiché en position:fixed par-dessus tout le reste.
+     Masqué dès que l'authentification réussit (showApp).
+═══════════════════════════════════════════════════════════════ -->
 <div class="login-screen" id="loginScreen">
+  <!-- Éléments décoratifs du fond (dégradé + grille) -->
   <div class="bg-deco"></div><div class="grid"></div>
+
+  <!-- Carte de connexion centrale -->
   <div class="auth-card">
+
+    <!-- Logo et titre de l'espace employé -->
     <div class="auth-logo">
       <span class="icon">👤</span>
       <h1>Food<span>Choose</span>App</h1>
       <p>Espace Employé</p>
     </div>
+
+    <!-- Champ : identifiant employé (ex. EMP-001) -->
     <div class="form-group">
       <label>Identifiant employé</label>
       <input class="form-control" id="empIdInput" placeholder="EMP-001">
     </div>
+
+    <!-- Champ : mot de passe avec touche Entrée pour soumettre -->
     <div class="form-group">
       <label>Mot de passe</label>
       <div class="pw-wrap">
         <input class="form-control" type="password" id="empPwdInput" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')loginEmployee()">
+        <!-- Bouton œil pour afficher/masquer le mot de passe (géré par initPasswordToggles) -->
         <button class="pw-toggle" type="button">👁</button>
       </div>
     </div>
+
+    <!-- Bouton principal de connexion — appelle loginEmployee() -->
     <button class="btn btn-primary" id="empLoginBtn" style="width:100%;padding:14px;margin-top:6px" onclick="loginEmployee()">Se connecter</button>
+
+    <!-- Zone d'affichage des erreurs de connexion (masquée par défaut) -->
     <div id="loginErr"></div>
+
+    <!-- Lien vers la procédure de mot de passe oublié -->
     <p style="text-align:center;margin-top:12px;font-size:13px">
       <a href="#" style="color:var(--orange)" onclick="openForgotModal('employee')">Mot de passe oublié ?</a>
     </p>
+
+    <!-- Lien de retour vers la page d'accueil principale -->
     <p style="text-align:center;margin-top:8px"><a href="/" style="font-size:12.5px;color:var(--muted);text-decoration:none">← Retour à l'accueil</a></p>
   </div>
 </div>
 
-<!-- FORGOT PASSWORD MODAL -->
+<!-- ═══════════════════════════════════════════════════════════════
+     MODAL : MOT DE PASSE OUBLIÉ
+     Processus en 3 étapes :
+       Étape 1 — Saisie de l'email → envoi d'un code OTP
+       Étape 2 — Vérification du code OTP à 6 chiffres
+       Étape 3 — Définition du nouveau mot de passe
+     Masqué par défaut (display:none), ouvert par openForgotModal()
+═══════════════════════════════════════════════════════════════ -->
 <div id="forgotModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;align-items:center;justify-content:center">
   <div style="background:var(--cream);border-radius:18px;padding:32px;width:100%;max-width:400px;margin:20px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
     <h3 style="font-family:'Playfair Display',serif;color:var(--brown);margin-bottom:6px">🔑 Mot de passe oublié</h3>
+
+    <!-- ÉTAPE 1 : saisie de l'email et envoi du code OTP -->
     <div id="fp-step1"><p style="font-size:13px;color:var(--muted);margin-bottom:16px">Entrez votre email pour recevoir un code OTP.</p><div class="form-group"><label>Email</label><input class="form-control" id="fp-email" type="email" placeholder="votre@email.com"></div><div id="fp-err" style="color:#dc2626;font-size:13px;margin-bottom:10px;display:none"></div><button class="btn btn-primary" style="width:100%" onclick="fpSendOtp()">📧 Envoyer le code</button></div>
+
+    <!-- ÉTAPE 2 : saisie du code OTP reçu par email (6 chiffres) -->
     <div id="fp-step2" style="display:none"><p style="font-size:13px;color:var(--muted);margin-bottom:16px">Entrez le code à 6 chiffres reçu par email.</p><div class="form-group"><label>Code OTP</label><input class="form-control" id="fp-otp" placeholder="000000" maxlength="6" style="letter-spacing:6px;font-size:22px;text-align:center;font-family:monospace"></div><div id="fp-err2" style="color:#dc2626;font-size:13px;margin-bottom:10px;display:none"></div><button class="btn btn-primary" style="width:100%" onclick="fpVerifyOtp()">✅ Vérifier le code</button></div>
+
+    <!-- ÉTAPE 3 : saisie et confirmation du nouveau mot de passe -->
     <div id="fp-step3" style="display:none"><p style="font-size:13px;color:var(--muted);margin-bottom:16px">Définissez votre nouveau mot de passe.</p><div class="form-group"><label>Nouveau mot de passe</label><div class="pw-wrap"><input class="form-control" type="password" id="fp-pwd" placeholder="Minimum 6 caractères"><button class="pw-toggle" type="button">👁</button></div></div><div class="form-group"><label>Confirmer</label><div class="pw-wrap"><input class="form-control" type="password" id="fp-pwd2" placeholder="Répétez"><button class="pw-toggle" type="button">👁</button></div></div><div id="fp-err3" style="color:#dc2626;font-size:13px;margin-bottom:10px;display:none"></div><button class="btn btn-primary" style="width:100%" onclick="fpResetPassword()">🔐 Changer le mot de passe</button></div>
+
+    <!-- Bouton pour fermer/annuler le modal -->
     <button onclick="closeForgotModal()" style="width:100%;margin-top:12px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px">Annuler</button>
   </div>
 </div>
 
-<!-- MAIN APP (hidden until login) -->
+<!-- ═══════════════════════════════════════════════════════════════
+     APPLICATION PRINCIPALE
+     Masquée au chargement (display:none).
+     Rendue visible par showApp() après connexion réussie.
+═══════════════════════════════════════════════════════════════ -->
 <div id="appScreen" style="display:none">
 <div class="app-layout">
 
+<!-- ─────────────────────────────────────────────────────────────
+     OVERLAY MOBILE POUR LA SIDEBAR
+     Fond semi-transparent affiché derrière la sidebar sur mobile
+───────────────────────────────────────────────────────────────── -->
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     BARRE LATÉRALE (SIDEBAR)
+     Navigation principale de l'espace employé :
+       - Logo / identité de l'application
+       - Menu de navigation par pages
+       - Pied de page avec les infos de l'utilisateur connecté
+═══════════════════════════════════════════════════════════════ -->
 <aside class="sidebar" id="sidebar">
+
+  <!-- Logo et badge "Employé" dans la sidebar -->
   <div class="sidebar-logo">
     <span class="logo-icon">👤</span>
     <div class="logo-name">Food<span>Choose</span></div>
     <span class="logo-badge">Employé</span>
   </div>
+
+  <!-- Liens de navigation — data-page correspond aux id de page (page-meal, etc.) -->
   <nav class="sidebar-nav">
+    <!-- Section : Mon repas -->
     <div class="nav-section">Mon repas</div>
+    <!-- Page de choix du repas du jour (active par défaut) -->
     <div class="nav-item active" data-page="meal"><span class="icon">🍽</span><span>Choisir mon repas</span></div>
+
+    <!-- Section : Mon compte -->
     <div class="nav-section">Mon compte</div>
+    <!-- Page historique des commandes passées -->
     <div class="nav-item" data-page="history"><span class="icon">📋</span><span>Mon historique</span></div>
+    <!-- Page des notes attribuées aux repas -->
     <div class="nav-item" data-page="ratings"><span class="icon">⭐</span><span>Mes notes</span></div>
+    <!-- Page profil : photo et changement de mot de passe -->
     <div class="nav-item" data-page="profile"><span class="icon">⚙️</span><span>Mon profil</span></div>
+    <!-- Bouton de déconnexion — appelle logoutEmp() -->
     <button class="nav-item-logout" onclick="logoutEmp()"><span class="icon">🚪</span><span>Déconnexion</span></button>
   </nav>
+
+  <!-- Pied de sidebar : avatar et nom de l'employé connecté -->
   <div class="sidebar-footer">
     <div class="user-card">
+      <!-- Avatar : affiche l'emoji par défaut ou la photo de profil -->
       <div class="user-avatar" id="sidebarAvatar">👤</div>
-      <div><div class="user-name" id="sidebarName">—</div><div class="user-role" id="sidebarId">—</div></div>
+      <div>
+        <!-- Nom complet de l'employé (mis à jour par showApp / loadEmpProfile) -->
+        <div class="user-name" id="sidebarName">—</div>
+        <!-- Identifiant employé (ex. EMP-001) -->
+        <div class="user-role" id="sidebarId">—</div>
+      </div>
     </div>
   </div>
 </aside>
 
+<!-- ═══════════════════════════════════════════════════════════════
+     ZONE PRINCIPALE (MAIN)
+     Contient la barre supérieure (topbar) et le contenu des pages
+═══════════════════════════════════════════════════════════════ -->
 <main class="main">
+
+  <!-- ─────────────────────────────────────────────────────────────
+       BARRE SUPÉRIEURE (TOPBAR)
+       Hamburger mobile | Titre de la page | Date du jour | Notifs
+  ───────────────────────────────────────────────────────────────── -->
   <div class="topbar">
     <div class="topbar-left">
+      <!-- Bouton hamburger pour ouvrir/fermer la sidebar sur mobile -->
       <button class="hamburger" id="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+      <!-- Titre dynamique de la page courante (mis à jour par initNav) -->
       <div class="topbar-title" id="pageTitle">Choisir mon repas</div>
     </div>
     <div class="topbar-right">
+      <!-- Date du jour affichée en français (ex. "vendredi 10 avril") -->
       <span id="topDate" style="font-size:12px;color:var(--muted)"></span>
+      <!-- Cloche de notifications avec compteur de messages non lus -->
       <div style="position:relative">
         <button class="notif-btn" onclick="toggleNotifDropdown()">🔔<span class="notif-count" id="notifCount" style="display:none">0</span></button>
+        <!-- Dropdown des notifications (rempli par initNotifications) -->
         <div class="notif-dropdown" id="notifDropdown"></div>
       </div>
     </div>
   </div>
 
+  <!-- ═══════════════════════════════════════════════════════════════
+       ZONE DE CONTENU DES PAGES
+       Chaque <div class="page"> correspond à une section de l'app.
+       La classe "active" rend la page visible (gérée par initNav).
+  ═══════════════════════════════════════════════════════════════ -->
   <div class="content">
 
-  <!-- ═══ MEAL CHOICE ═══ -->
+  <!-- ═══════════════════════════════════════════════════════════════
+       PAGE : CHOIX DU REPAS (page-meal)
+       Permet à l'employé de :
+         1. Rechercher un plat par mot-clé
+         2. Consulter sa commande du jour (bannière)
+         3. Sélectionner un restaurant puis un menu
+         4. Choisir une boisson et valider la commande
+  ═══════════════════════════════════════════════════════════════ -->
   <div class="page active" id="page-meal">
-    <!-- Dish search -->
+
+    <!-- Barre de recherche de plats par nom (recherche live avec debounce) -->
     <div class="card" style="margin-bottom:16px">
       <div class="card-body" style="padding:12px 16px">
         <input class="form-control" id="dishSearch" placeholder="🔍 Rechercher un plat..." oninput="searchDishes(this.value)" autocomplete="off">
+        <!-- Résultats de recherche injectés dynamiquement, masqués par défaut -->
         <div id="dishSearchResults" style="display:none;margin-top:10px"></div>
       </div>
     </div>
-    <!-- Today's order banner -->
+
+    <!-- Bannière de commande du jour — visible si une commande existe déjà -->
     <div id="todayBanner" style="display:none" class="order-banner">
       <div>
+        <!-- Nom du menu commandé et restaurant -->
         <div class="ob-title">🎉 Commande du jour</div>
         <div class="ob-menu" id="obMenu">—</div>
+        <!-- Préférence boisson + statut de la commande -->
         <div class="ob-meta" id="obMeta">—</div>
       </div>
+      <!-- Actions disponibles sur la commande du jour -->
       <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <!-- Bouton annulation : appelle cancelTodayOrder() -->
         <button class="btn btn-outline btn-sm" style="background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4);color:white" onclick="cancelTodayOrder()">🗑 Annuler</button>
+        <!-- Bouton notation : ouvre le modal de notation via rateCurrentOrder() -->
         <button class="btn btn-outline btn-sm" style="background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4);color:white" onclick="rateCurrentOrder()">⭐ Noter</button>
       </div>
     </div>
 
-    <!-- Restaurant selection -->
+    <!-- ─────────────────────────────────────────────────────────────
+         VUE : SÉLECTION DU RESTAURANT
+         Affiche la liste de tous les restaurants affiliés à l'entreprise.
+         Masquée quand un restaurant est sélectionné.
+    ───────────────────────────────────────────────────────────────── -->
     <div id="restaurantSelectionView">
       <div class="card">
         <div class="card-header"><span class="card-title">🍽 Restaurants disponibles</span></div>
         <div class="card-body">
+          <!-- Liste des restaurants (remplie par loadRestaurants) -->
           <div class="rest-list" id="restList"></div>
         </div>
       </div>
     </div>
 
-    <!-- Menu selection -->
+    <!-- ─────────────────────────────────────────────────────────────
+         VUE : SÉLECTION DU MENU
+         Affichée après qu'un restaurant a été sélectionné.
+         Contient : grille des menus, préférence boisson, aperçu.
+    ───────────────────────────────────────────────────────────────── -->
     <div id="menuSelectionView" style="display:none">
+
+      <!-- En-tête avec bouton retour et nom du restaurant sélectionné -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+        <!-- Retour à la liste des restaurants -->
         <button class="btn btn-outline btn-sm" onclick="backToRestaurants()">← Restaurants</button>
+        <!-- Nom du restaurant courant (mis à jour par selectRestaurant) -->
         <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--brown)" id="selectedRestName">—</div>
       </div>
+
+      <!-- Grille des menus disponibles (remplie par selectRestaurant) -->
       <div class="menu-grid" id="menuGrid"></div>
 
-      <!-- Drink preference -->
+      <!-- Carte de préférence de boisson (Lipton / Caféine / Les deux) -->
       <div class="card" style="margin-top:18px">
         <div class="card-header"><span class="card-title">🥤 Préférence boisson</span></div>
         <div class="card-body" style="display:flex;gap:14px;flex-wrap:wrap">
+          <!-- Option Lipton -->
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
             <input type="radio" name="drink" value="lipton" id="drinkLipton" style="accent-color:var(--orange);width:16px;height:16px">🍵 Lipton
           </label>
+          <!-- Option Caféine -->
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
             <input type="radio" name="drink" value="cafeine" id="drinkCafeine" style="accent-color:var(--orange);width:16px;height:16px">☕ Caféine
           </label>
+          <!-- Option Les deux -->
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
             <input type="radio" name="drink" value="both" id="drinkBoth" style="accent-color:var(--orange);width:16px;height:16px">🍵☕ Les deux
           </label>
         </div>
       </div>
 
+      <!-- Aperçu du menu sélectionné + bouton de validation de commande -->
       <div id="selectedMenuPreview" style="display:none;margin-top:14px" class="card">
         <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
           <div>
             <div style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Menu sélectionné</div>
+            <!-- Nom du menu sélectionné (mis à jour par selectMenu) -->
             <div style="font-size:16px;font-weight:700;color:var(--brown);margin-top:3px" id="previewMenuName">—</div>
+            <!-- Prix du menu en FCFA -->
             <div style="font-size:13px;color:var(--orange)" id="previewMenuPrice">—</div>
           </div>
+          <!-- Bouton de validation finale — appelle confirmOrder() -->
           <button class="btn btn-primary" style="padding:12px 24px" onclick="confirmOrder()">✅ Valider ma commande</button>
         </div>
       </div>
     </div>
-  </div>
+  </div><!-- /page-meal -->
 
-  <!-- ═══ HISTORY ═══ -->
+  <!-- ═══════════════════════════════════════════════════════════════
+       PAGE : HISTORIQUE DES COMMANDES (page-history)
+       Affiche toutes les commandes passées de l'employé avec actions.
+  ═══════════════════════════════════════════════════════════════ -->
   <div class="page" id="page-history">
     <div class="card">
       <div class="card-header">
         <span class="card-title">Mon historique</span>
         <div style="display:flex;gap:8px">
+          <!-- Rafraîchir la liste de l'historique -->
           <button class="btn btn-outline btn-sm" onclick="loadEmpHistory()">🔄</button>
+          <!-- Supprimer tout l'historique (confirmation requise) -->
           <button class="btn btn-danger btn-sm" onclick="clearHistory()">🗑 Tout vider</button>
         </div>
       </div>
+      <!-- Liste des items d'historique injectée par loadEmpHistory() -->
       <div class="card-body" id="historyList"></div>
     </div>
   </div>
 
-  <!-- ═══ RATINGS ═══ -->
+  <!-- ═══════════════════════════════════════════════════════════════
+       PAGE : MES NOTES DE PLATS (page-ratings)
+       Affiche un accès rapide pour noter le repas du jour.
+  ═══════════════════════════════════════════════════════════════ -->
   <div class="page" id="page-ratings">
     <div class="card">
       <div class="card-header"><span class="card-title">⭐ Mes notes de plats</span></div>
+      <!-- Contenu injecté par loadRatingsPage() -->
       <div class="card-body" id="ratingsList">
+        <!-- État vide par défaut avant que la page soit chargée -->
         <div class="empty-state"><span class="icon">⭐</span>Utilisez le bouton "Noter" après avoir commandé</div>
       </div>
     </div>
   </div>
 
-  <!-- ═══ PROFILE ═══ -->
+  <!-- ═══════════════════════════════════════════════════════════════
+       PAGE : MON PROFIL (page-profile)
+       Permet à l'employé de :
+         - Mettre à jour sa photo de profil
+         - Changer son mot de passe
+  ═══════════════════════════════════════════════════════════════ -->
   <div class="page" id="page-profile">
     <div class="page-grid">
+
+      <!-- Carte : photo de profil -->
       <div class="card">
         <div class="card-header"><span class="card-title">Ma photo de profil</span></div>
         <div class="card-body" style="text-align:center">
+          <!-- Aperçu circulaire de la photo (emoji par défaut ou image uploadée) -->
           <div class="photo-preview" id="empPhotoPreview" style="width:100px;height:100px;font-size:40px;margin:0 auto 14px">
+            <!-- Image chargée depuis l'API ou sélectionnée localement -->
             <img id="empPhotoImg" src="" style="display:none">
           </div>
+          <!-- Label cliquable qui déclenche l'input file caché -->
           <label class="btn btn-primary btn-sm" style="cursor:pointer">📷 Choisir une photo
+            <!-- Input file masqué — déclenche handleEmpPhoto() au changement -->
             <input type="file" accept="image/*" id="empPhotoInput" style="display:none" onchange="handleEmpPhoto(this)">
           </label>
         </div>
       </div>
+
+      <!-- Carte : changement de mot de passe -->
       <div class="card">
         <div class="card-header"><span class="card-title">Changer mon mot de passe</span></div>
         <div class="card-body">
+          <!-- Bloc d'informations de profil (nom, ID, email) — rempli par loadEmpProfile() -->
           <div id="profileInfo" style="margin-bottom:14px;padding:12px;background:#F9F1EB;border-radius:10px;font-size:13px"></div>
+
+          <!-- Champ nouveau mot de passe avec toggle visibilité -->
           <div class="form-group">
             <label>Nouveau mot de passe</label>
             <div class="pw-wrap">
@@ -236,6 +424,8 @@
               <button class="pw-toggle" type="button">👁</button>
             </div>
           </div>
+
+          <!-- Champ confirmation mot de passe avec toggle visibilité -->
           <div class="form-group">
             <label>Confirmer</label>
             <div class="pw-wrap">
@@ -243,24 +433,35 @@
               <button class="pw-toggle" type="button">👁</button>
             </div>
           </div>
+
+          <!-- Bouton de soumission — appelle changePassword() -->
           <button class="btn btn-primary" style="width:100%" onclick="changePassword()">🔐 Changer le mot de passe</button>
         </div>
       </div>
     </div>
-  </div>
+
+  </div><!-- /page-profile -->
 
   </div><!-- /content -->
 </main>
 </div>
 </div>
 
-<!-- RATE MODAL -->
+<!-- ═══════════════════════════════════════════════════════════════
+     MODAL : NOTER SON REPAS
+     Ouvert par openRateModal() / rateCurrentOrder().
+     Permet d'attribuer 1 à 5 étoiles et un commentaire optionnel.
+═══════════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="rateModal">
   <div class="modal">
     <div class="modal-title">⭐ Noter votre repas</div>
+    <!-- Nom du menu à noter (rempli par rateCurrentOrder) -->
     <div style="margin-bottom:14px;font-size:13px;color:var(--muted)" id="rateMenuName">—</div>
+
+    <!-- Zone de sélection des étoiles -->
     <div style="margin-bottom:18px">
       <div style="font-size:13px;font-weight:600;color:var(--brown);margin-bottom:10px">Votre note :</div>
+      <!-- Cinq étoiles cliquables — chaque clic appelle setRating(valeur) -->
       <div class="star-rating" id="starRating">
         <span class="star" data-v="1" onclick="setRating(1)">☆</span>
         <span class="star" data-v="2" onclick="setRating(2)">☆</span>
@@ -268,95 +469,237 @@
         <span class="star" data-v="4" onclick="setRating(4)">☆</span>
         <span class="star" data-v="5" onclick="setRating(5)">☆</span>
       </div>
+      <!-- Libellé textuel correspondant à la note choisie -->
       <div id="ratingLabel" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
     </div>
+
+    <!-- Champ commentaire libre (optionnel) -->
     <div class="form-group">
       <label>Commentaire (optionnel)</label>
       <textarea class="form-control" id="rateComment" rows="2" placeholder="Votre avis..."></textarea>
     </div>
+
+    <!-- Pied du modal : annuler ou envoyer la note -->
     <div class="modal-footer">
+      <!-- Ferme le modal sans soumettre -->
       <button class="btn btn-outline" onclick="document.getElementById('rateModal').classList.remove('open')">Annuler</button>
+      <!-- Soumet la note via submitRating() -->
       <button class="btn btn-primary" onclick="submitRating()">⭐ Envoyer ma note</button>
     </div>
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════════
+     SCRIPTS JAVASCRIPT
+     utils.js : fonctions utilitaires partagées (apiFetch, toast,
+                initSidebar, initNav, initPasswordToggles,
+                initNotifications, toggleNotifDropdown,
+                readFileAsBase64, todayStr, formatDate,
+                CAT_ICONS, DRINK_LABELS)
+═══════════════════════════════════════════════════════════════ -->
 <script src="/assets/js/utils.js"></script>
 <script>
-// ── Auth ──────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// VARIABLES GLOBALES D'ÉTAT DE L'APPLICATION
+// ══════════════════════════════════════════════════════════════════
+
+// Jeton JWT de l'employé connecté, persisté dans localStorage
 let empToken = localStorage.getItem('fc_token');
+
+// Données complètes du profil employé (chargées par loadEmpProfile)
 let empData = null;
+
+// Identifiant du menu actuellement sélectionné dans la grille
 let selectedMenuId = null;
+
+// Objet contenant les détails du menu sélectionné { id, name, price }
 let selectedMenuData = null;
+
+// Identifiant du restaurant sélectionné
 let selectedRestId = null;
+
+// Données de la commande en cours de notation { menuId, restaurantId, date }
 let currentRateOrder = null;
+
+// Note courante (1 à 5) dans le modal de notation
 let currentRating = 0;
 
+// ── Initialisations au chargement de la page ──────────────────────
+
+// Active les boutons œil (toggle visibilité) sur tous les champs mot de passe
 initPasswordToggles();
+
+// Affiche la date du jour en français dans la barre supérieure
 document.getElementById('topDate').textContent = new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'});
 
-// ── Mot de passe oublié (employé) ─────────────────────
+// ══════════════════════════════════════════════════════════════════
+// MODULE : MOT DE PASSE OUBLIÉ (PROCÉDURE OTP EN 3 ÉTAPES)
+// ══════════════════════════════════════════════════════════════════
+
+// Type d'utilisateur pour la procédure de réinitialisation (toujours 'employee' ici)
 let _fpType = 'employee';
+
+/**
+ * openForgotModal — Ouvre le modal de mot de passe oublié.
+ * Réinitialise toutes les étapes et les champs avant ouverture.
+ * @param {string} type - Type d'utilisateur ('employee')
+ */
 function openForgotModal(type) { _fpType=type; ['fp-step1','fp-step2','fp-step3'].forEach((id,i)=>document.getElementById(id).style.display=i===0?'block':'none'); ['fp-err','fp-err2','fp-err3'].forEach(id=>{const el=document.getElementById(id);el.style.display='none';el.textContent='';}); document.getElementById('fp-email').value=''; document.getElementById('fp-otp').value=''; document.getElementById('fp-pwd').value=''; document.getElementById('fp-pwd2').value=''; const m=document.getElementById('forgotModal'); m.style.display='flex'; initPasswordToggles(); }
+
+/**
+ * closeForgotModal — Ferme le modal de mot de passe oublié.
+ */
 function closeForgotModal() { document.getElementById('forgotModal').style.display='none'; }
+
+/**
+ * fpSendOtp — Étape 1 : Envoie un code OTP à l'adresse email saisie.
+ * Appel API : POST /api/auth/forgot-password
+ * En cas de succès, passe à l'étape 2 (saisie du code OTP).
+ */
 async function fpSendOtp() { const email=document.getElementById('fp-email').value.trim(); const errEl=document.getElementById('fp-err'); errEl.style.display='none'; if(!email){errEl.textContent='Email requis';errEl.style.display='block';return;} try{ await apiFetch('/api/auth/forgot-password',{method:'POST',body:JSON.stringify({email,userType:_fpType})}); document.getElementById('fp-step1').style.display='none'; document.getElementById('fp-step2').style.display='block'; toast('Code envoyé !','success'); }catch(e){errEl.textContent=e.message;errEl.style.display='block';} }
+
+/**
+ * fpVerifyOtp — Étape 2 : Vérifie le code OTP à 6 chiffres saisi.
+ * Appel API : POST /api/auth/verify-otp
+ * En cas de succès, passe à l'étape 3 (nouveau mot de passe).
+ */
 async function fpVerifyOtp() { const email=document.getElementById('fp-email').value.trim(); const otp=document.getElementById('fp-otp').value.trim(); const errEl=document.getElementById('fp-err2'); errEl.style.display='none'; if(otp.length!==6){errEl.textContent='Code à 6 chiffres requis';errEl.style.display='block';return;} try{ await apiFetch('/api/auth/verify-otp',{method:'POST',body:JSON.stringify({email,userType:_fpType,otp})}); document.getElementById('fp-step2').style.display='none'; document.getElementById('fp-step3').style.display='block'; }catch(e){errEl.textContent=e.message;errEl.style.display='block';} }
+
+/**
+ * fpResetPassword — Étape 3 : Enregistre le nouveau mot de passe.
+ * Valide : correspondance des deux champs, longueur minimale (6 car.).
+ * Appel API : POST /api/auth/reset-password
+ * En cas de succès, ferme le modal et invite à se reconnecter.
+ */
 async function fpResetPassword() { const email=document.getElementById('fp-email').value.trim(); const otp=document.getElementById('fp-otp').value.trim(); const pwd=document.getElementById('fp-pwd').value; const pwd2=document.getElementById('fp-pwd2').value; const errEl=document.getElementById('fp-err3'); errEl.style.display='none'; if(pwd!==pwd2){errEl.textContent='Les mots de passe ne correspondent pas';errEl.style.display='block';return;} if(pwd.length<6){errEl.textContent='Minimum 6 caractères';errEl.style.display='block';return;} try{ await apiFetch('/api/auth/reset-password',{method:'POST',body:JSON.stringify({email,userType:_fpType,otp,newPassword:pwd})}); toast('Mot de passe changé ! Connectez-vous.','success'); closeForgotModal(); }catch(e){errEl.textContent=e.message;errEl.style.display='block';} }
 
+// ── Auto-login si un token valide est déjà présent en localStorage ──
+// Si le rôle stocké est 'employee', on passe directement à l'application
 if (empToken && localStorage.getItem('fc_role') === 'employee') {
   showApp();
 }
 
+// ══════════════════════════════════════════════════════════════════
+// MODULE : AUTHENTIFICATION
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * loginEmployee — Authentifie l'employé avec son identifiant et mot de passe.
+ * Valide les champs côté client, puis envoie les identifiants à l'API.
+ * Appel API : POST /api/auth/employee/login
+ * En cas de succès : stocke le token JWT en localStorage et lance showApp().
+ * En cas d'échec : affiche le message d'erreur dans #loginErr.
+ */
 async function loginEmployee() {
+  // Récupération des valeurs saisies
   const empId = document.getElementById('empIdInput').value.trim();
   const pwd = document.getElementById('empPwdInput').value;
   const err = document.getElementById('loginErr');
   err.classList.remove('show');
+
+  // Validation côté client : les deux champs sont obligatoires
   if (!empId || !pwd) { err.textContent = 'Tous les champs sont requis'; err.classList.add('show'); return; }
+
+  // Désactivation du bouton pendant la requête (évite les doubles soumissions)
   const btn = document.getElementById('empLoginBtn');
   btn.disabled = true; btn.textContent = '⏳ Connexion...';
+
   try {
+    // Envoi des identifiants à l'API d'authentification employé
     const data = await apiFetch('/api/auth/employee/login', { method: 'POST', body: JSON.stringify({ employeeId: empId, password: pwd }) });
+
+    // Persistance du token et des informations de session en localStorage
     localStorage.setItem('fc_token', data.token);
     localStorage.setItem('fc_role', 'employee');
     localStorage.setItem('fc_name', data.name);
     localStorage.setItem('fc_id', data.companyId);
+
+    // Mise à jour de la variable globale du token
     empToken = data.token;
+
+    // Basculement vers l'application principale
     showApp();
   } catch(e) {
+    // Affichage de l'erreur retournée par l'API
     err.textContent = e.message; err.classList.add('show');
-  } finally { btn.disabled = false; btn.textContent = 'Se connecter'; }
+  } finally {
+    // Réactivation du bouton dans tous les cas
+    btn.disabled = false; btn.textContent = 'Se connecter';
+  }
 }
 
+/**
+ * showApp — Masque l'écran de login et affiche l'application principale.
+ * Initialise la sidebar, la navigation entre pages, la page repas
+ * et le système de notifications en temps réel.
+ */
 function showApp() {
+  // Masque l'écran de login, révèle l'application
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appScreen').style.display = 'block';
+
+  // Affiche le nom de l'employé dans la sidebar
   const name = localStorage.getItem('fc_name') || '—';
   document.getElementById('sidebarName').textContent = name;
+
+  // Initialise le comportement de la sidebar (hamburger, overlay mobile)
   initSidebar();
+
+  // Initialise la navigation entre pages :
+  // À chaque changement de page, le callback approprié est déclenché
   initNav(null, (page) => {
-    if (page === 'meal') initMealPage();
-    else if (page === 'history') loadEmpHistory();
-    else if (page === 'profile') loadEmpProfile();
-    else if (page === 'ratings') loadRatingsPage();
+    if (page === 'meal') initMealPage();           // Recharge la page repas
+    else if (page === 'history') loadEmpHistory(); // Recharge l'historique
+    else if (page === 'profile') loadEmpProfile(); // Recharge le profil
+    else if (page === 'ratings') loadRatingsPage();// Recharge la page notes
   });
+
+  // Chargement initial de la page repas (page par défaut)
   initMealPage();
+
+  // Démarrage du système de notifications en temps réel
   initNotifications();
 }
 
+/**
+ * logoutEmp — Déconnecte l'employé.
+ * Efface toutes les données de session (localStorage) et redirige vers l'accueil.
+ */
 function logoutEmp() { localStorage.clear(); window.location.href = '/'; }
 
-// ── Dish search ────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// MODULE : RECHERCHE DE PLATS
+// ══════════════════════════════════════════════════════════════════
+
+// Référence au timer de debounce pour la recherche (évite trop de requêtes)
 let dishSearchTimer = null;
+
+/**
+ * searchDishes — Recherche des plats par mot-clé avec un délai de debounce.
+ * Déclenché à chaque frappe dans le champ #dishSearch (événement oninput).
+ * Appel API : GET /api/employee/search?q=<terme>
+ * Affiche les résultats dans #dishSearchResults (résultats cliquables).
+ * @param {string} q - La chaîne de recherche saisie par l'utilisateur
+ */
 async function searchDishes(q) {
+  // Annule le timer précédent pour implémenter le debounce
   clearTimeout(dishSearchTimer);
   const results = document.getElementById('dishSearchResults');
+
+  // Masque les résultats si la requête est trop courte (< 2 caractères)
   if (!q || q.trim().length < 2) { results.style.display = 'none'; return; }
+
+  // Déclenche la requête après 300ms d'inactivité clavier
   dishSearchTimer = setTimeout(async () => {
     try {
+      // Requête de recherche avec encodage de l'URL pour les caractères spéciaux
       const data = await apiFetch(`/api/employee/search?q=${encodeURIComponent(q.trim())}`, {}, empToken);
       results.style.display = 'block';
+
+      // Cas : aucun résultat trouvé
       if (!data.length) { results.innerHTML = '<div class="empty-state" style="padding:12px"><span class="icon">🔍</span>Aucun plat trouvé</div>'; return; }
+
+      // Génère le HTML des résultats — chaque item est cliquable et navigue vers le restaurant
       results.innerHTML = data.map(m => `
         <div onclick="goToRestaurantMenu(${m.restaurant_id}, '${m.restaurant_name.replace(/'/g,"\\'")}', ${m.id})"
              style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--cream);border:1.5px solid var(--border);border-radius:10px;margin-bottom:6px;cursor:pointer;transition:border-color .2s"
@@ -368,77 +711,157 @@ async function searchDishes(q) {
           <div style="font-weight:700;color:var(--orange);font-size:13px;white-space:nowrap">${parseFloat(m.price||0).toLocaleString()} FCFA</div>
         </div>
       `).join('');
-    } catch(e) {}
+    } catch(e) {
+      // Erreur silencieuse — l'utilisateur n'est pas bloqué
+    }
   }, 300);
 }
 
+/**
+ * goToRestaurantMenu — Navigue vers le restaurant contenant le plat trouvé.
+ * Efface la barre de recherche et les résultats, puis sélectionne le restaurant.
+ * @param {number} restId - Identifiant du restaurant
+ * @param {string} restName - Nom du restaurant à afficher
+ * @param {number} highlightMenuId - Identifiant du menu à mettre en avant (non utilisé directement)
+ */
 function goToRestaurantMenu(restId, restName, highlightMenuId) {
+  // Nettoyage de la barre de recherche et masquage des résultats
   document.getElementById('dishSearch').value = '';
   document.getElementById('dishSearchResults').style.display = 'none';
+
+  // Navigation vers le restaurant et chargement de ses menus
   selectRestaurant(restId, restName);
 }
 
-// ── Meal page ─────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// MODULE : PAGE REPAS (CHOIX DU MENU DU JOUR)
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * initMealPage — Initialise la page de choix du repas.
+ * 1. Vérifie si une commande existe déjà pour aujourd'hui (bannière).
+ * 2. Lance le chargement de la liste des restaurants.
+ * Appel API : GET /api/employee/order
+ */
 async function initMealPage() {
-  // Check today's order
+  // Vérification de la commande du jour
   try {
     const orders = await apiFetch('/api/employee/order', {}, empToken);
     const banner = document.getElementById('todayBanner');
+
     if (orders && orders.length > 0) {
+      // Une commande existe aujourd'hui : affiche la bannière avec ses détails
       const o = orders[0];
       banner.style.display = 'flex';
+
+      // Affiche le nom du menu et le restaurant
       document.getElementById('obMenu').textContent = `${o.menu_name} @ ${o.restaurant_name}`;
+
+      // Affiche la préférence boisson et le statut de la commande
       document.getElementById('obMeta').textContent = `${DRINK_LABELS[o.drink_preference]||''} — Statut : ${o.status}`;
-      window._todayOrderId = o.id;
-      window._todayMenuId = o.menu_id;
-      window._todayRestId = o.restaurant_id;
-    } else { banner.style.display = 'none'; }
-  } catch(e) { document.getElementById('todayBanner').style.display = 'none'; }
-  // Load restaurants
+
+      // Stocke les données de la commande dans des variables globales de fenêtre
+      // pour permettre l'annulation et la notation
+      window._todayOrderId = o.id;       // ID de la commande (pour DELETE)
+      window._todayMenuId = o.menu_id;   // ID du menu (pour la notation)
+      window._todayRestId = o.restaurant_id; // ID du restaurant (pour la notation)
+    } else {
+      // Aucune commande aujourd'hui : masque la bannière
+      banner.style.display = 'none';
+    }
+  } catch(e) {
+    // En cas d'erreur API, masque la bannière sans bloquer l'utilisateur
+    document.getElementById('todayBanner').style.display = 'none';
+  }
+
+  // Chargement de la liste des restaurants disponibles
   loadRestaurants();
 }
 
+/**
+ * loadRestaurants — Charge et affiche la liste des restaurants affiliés.
+ * Appel API : GET /api/employee/restaurants
+ * Injecte les cartes de restaurants dans #restList.
+ * Chaque carte est cliquable et appelle selectRestaurant().
+ */
 async function loadRestaurants() {
   try {
     const rests = await apiFetch('/api/employee/restaurants', {}, empToken);
     const el = document.getElementById('restList');
+
+    // Cas : aucun restaurant affilié à l'entreprise
     if (!rests.length) { el.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><span class="icon">🍽</span>Aucun restaurant affilié à votre entreprise</div>'; return; }
+
+    // Génère le HTML de chaque carte restaurant
     el.innerHTML = rests.map(r => {
+      // Désérialisation des spécialités (tableau JSON ou tableau natif)
       const sps = Array.isArray(r.specialties) ? r.specialties : JSON.parse(r.specialties||'[]');
       return `
         <div class="rest-btn" onclick="selectRestaurant(${r.id}, '${r.name.replace(/'/g,"\\'")}')">
+          <!-- Avatar du restaurant : photo ou emoji par défaut -->
           <div class="rest-avatar" style="margin-bottom:10px;width:52px;height:52px">${r.photo_url?`<img src="${r.photo_url}">`:'🍽'}</div>
+          <!-- Nom du restaurant -->
           <div style="font-weight:700;font-size:13.5px;color:var(--brown);margin-bottom:4px">${r.name}</div>
+          <!-- Première spécialité culinaire -->
           <div style="font-size:11px;color:var(--muted)">${sps.slice(0,1).join('')||'Restaurant'}</div>
+          <!-- Nombre de menus disponibles -->
           <div style="margin-top:8px;font-size:12px;color:var(--orange)">🍜 ${r.menu_count} menus</div>
         </div>
       `;
     }).join('');
-  } catch(e) { toast('Erreur chargement restaurants', 'error'); }
+  } catch(e) {
+    toast('Erreur chargement restaurants', 'error');
+  }
 }
 
+/**
+ * selectRestaurant — Sélectionne un restaurant et charge ses menus.
+ * Masque la vue restaurants, affiche la vue menus.
+ * Récupère aussi la préférence boisson sauvegardée du profil.
+ * Appel API : GET /api/employee/profile (préférence boisson)
+ * Appel API : GET /api/employee/restaurants/:id/menus
+ * @param {number} id - Identifiant du restaurant sélectionné
+ * @param {string} name - Nom du restaurant à afficher
+ */
 async function selectRestaurant(id, name) {
+  // Mémorisation du restaurant sélectionné
   selectedRestId = id;
   document.getElementById('selectedRestName').textContent = name;
+
+  // Basculement entre les deux vues (restaurants → menus)
   document.getElementById('restaurantSelectionView').style.display = 'none';
   document.getElementById('menuSelectionView').style.display = 'block';
+
+  // Réinitialisation de la sélection de menu
   selectedMenuId = null;
   document.getElementById('selectedMenuPreview').style.display = 'none';
-  // Restore previous drink preference
+
+  // Restauration de la préférence boisson sauvegardée dans le profil
   try {
     const profile = await apiFetch('/api/employee/profile', {}, empToken);
     if (profile.drink_preference) document.querySelector(`input[name="drink"][value="${profile.drink_preference}"]`)?.click();
-  } catch(e) {}
-  // Load menus
+  } catch(e) {
+    // Ignoré silencieusement — la boisson reste non sélectionnée
+  }
+
+  // Chargement des menus du restaurant sélectionné
   try {
     const menus = await apiFetch(`/api/employee/restaurants/${id}/menus`, {}, empToken);
     const grid = document.getElementById('menuGrid');
+
+    // Cas : aucun menu disponible pour ce jour
     if (!menus.length) { grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><span class="icon">🍜</span>Aucun menu disponible ce jour</div>'; return; }
+
+    // Regroupement des menus par catégorie (ex. Entrée, Plat, Dessert)
     const byCat = {};
     menus.forEach(m=>{ if(!byCat[m.category]) byCat[m.category]=[]; byCat[m.category].push(m); });
+
+    // Génère le HTML groupé par catégorie avec titre et icône
     grid.innerHTML = Object.entries(byCat).map(([cat, items]) => `
+      <!-- Titre de section de catégorie -->
       <div style="grid-column:1/-1;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-top:6px">${CAT_ICONS[cat]||'🍽'} ${cat}</div>
       ${items.map(m=>`
+        <!-- Carte menu cliquable — appelle selectMenu() au clic -->
         <div class="menu-card" id="mc-${m.id}" onclick="selectMenu(${m.id}, '${m.name.replace(/'/g,"\\'")}', ${m.price||0})">
           <div style="font-weight:700;font-size:13.5px;color:var(--brown);margin-bottom:5px">${m.name}</div>
           ${m.description?`<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${m.description}</div>`:''}
@@ -446,173 +869,370 @@ async function selectRestaurant(id, name) {
         </div>
       `).join('')}
     `).join('');
-  } catch(e) { toast('Erreur chargement menus', 'error'); }
+  } catch(e) {
+    toast('Erreur chargement menus', 'error');
+  }
 }
 
+/**
+ * backToRestaurants — Revient à la vue liste des restaurants.
+ * Réinitialise les sélections de menu et restaurant.
+ */
 function backToRestaurants() {
   selectedMenuId = null; selectedRestId = null;
   document.getElementById('restaurantSelectionView').style.display = 'block';
   document.getElementById('menuSelectionView').style.display = 'none';
 }
 
+/**
+ * selectMenu — Marque un menu comme sélectionné et affiche l'aperçu.
+ * Retire la classe 'selected' de toutes les cartes, puis l'ajoute au menu cliqué.
+ * Met à jour les variables globales et l'aperçu de commande.
+ * @param {number} id - Identifiant du menu
+ * @param {string} name - Nom du menu
+ * @param {number} price - Prix du menu en FCFA
+ */
 function selectMenu(id, name, price) {
+  // Désélectionne toutes les cartes menu
   document.querySelectorAll('.menu-card').forEach(c=>c.classList.remove('selected'));
+
+  // Sélectionne la carte cliquée
   document.getElementById(`mc-${id}`)?.classList.add('selected');
+
+  // Mémorisation du menu sélectionné
   selectedMenuId = id;
   selectedMenuData = { id, name, price };
+
+  // Mise à jour de l'aperçu de commande (nom + prix)
   document.getElementById('previewMenuName').textContent = name;
   document.getElementById('previewMenuPrice').textContent = `${parseFloat(price).toLocaleString()} FCFA`;
+
+  // Affiche le bloc d'aperçu avec le bouton de validation
   document.getElementById('selectedMenuPreview').style.display = 'block';
 }
 
+/**
+ * confirmOrder — Valide et enregistre la commande du jour.
+ * Vérifie qu'un menu et un restaurant sont sélectionnés.
+ * Appel API : POST /api/employee/order
+ * En cas de succès : revient à la liste des restaurants et rafraîchit la bannière.
+ */
 async function confirmOrder() {
+  // Validation : menu et restaurant obligatoires
   if (!selectedMenuId || !selectedRestId) { toast('Sélectionnez un menu', 'error'); return; }
+
+  // Récupération de la préférence boisson (peut être null si aucune sélection)
   const drink = document.querySelector('input[name="drink"]:checked')?.value || null;
+
   try {
+    // Envoi de la commande à l'API avec menu, restaurant et boisson
     await apiFetch('/api/employee/order', { method: 'POST', body: JSON.stringify({ menuId: selectedMenuId, restaurantId: selectedRestId, drinkPreference: drink }) }, empToken);
     toast('Commande enregistrée !', 'success');
+
+    // Retour à la vue initiale et rafraîchissement de la bannière
     backToRestaurants();
     initMealPage();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) {
+    toast(e.message, 'error');
+  }
 }
 
+/**
+ * cancelTodayOrder — Annule la commande du jour après confirmation utilisateur.
+ * Appel API : DELETE /api/employee/order/:id
+ * En cas de succès : rafraîchit la page repas (masque la bannière).
+ */
 async function cancelTodayOrder() {
+  // Vérifie qu'une commande du jour existe
   if (!window._todayOrderId) return;
+
+  // Demande confirmation à l'utilisateur avant suppression
   if (!confirm('Annuler votre commande du jour ?')) return;
+
   try {
+    // Suppression de la commande via son identifiant
     await apiFetch(`/api/employee/order/${window._todayOrderId}`, { method: 'DELETE' }, empToken);
-    toast('Commande annulée', 'info'); initMealPage();
-  } catch(e) { toast(e.message, 'error'); }
+    toast('Commande annulée', 'info');
+    initMealPage(); // Rafraîchit la page (masque la bannière)
+  } catch(e) {
+    toast(e.message, 'error');
+  }
 }
 
+/**
+ * rateCurrentOrder — Prépare et ouvre le modal de notation pour la commande du jour.
+ * Récupère les données de la commande depuis les variables globales window.
+ */
 function rateCurrentOrder() {
+  // Vérifie qu'un menu est associé à la commande du jour
   if (!window._todayMenuId) return;
+
+  // Construit l'objet de commande à noter
   currentRateOrder = { menuId: window._todayMenuId, restaurantId: window._todayRestId, date: todayStr() };
+
+  // Affiche le nom du menu dans le titre du modal de notation
   document.getElementById('rateMenuName').textContent = document.getElementById('obMenu').textContent;
+
+  // Ouvre le modal de notation
   openRateModal();
 }
 
-// ── History ───────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// MODULE : HISTORIQUE DES COMMANDES
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * loadEmpHistory — Charge et affiche l'historique complet des commandes.
+ * Appel API : GET /api/employee/history
+ * Injecte chaque entrée dans #historyList avec icône, badge et bouton suppression.
+ */
 async function loadEmpHistory() {
   try {
     const hist = await apiFetch('/api/employee/history', {}, empToken);
     const el = document.getElementById('historyList');
+
+    // Cas : aucun historique disponible
     if (!hist.length) { el.innerHTML = '<div class="empty-state"><span class="icon">📋</span>Aucun historique</div>'; return; }
+
+    // Génère le HTML de chaque item d'historique
     el.innerHTML = hist.map(h=>`
       <div class="hist-item">
+        <!-- Icône selon le type d'action : création, suppression ou modification -->
         <div class="hist-icon">${h.action==='created'?'🛒':h.action==='deleted'?'🗑':'✏️'}</div>
         <div style="flex:1">
+          <!-- Nom du menu commandé -->
           <div style="font-weight:600;font-size:13.5px;color:var(--brown)">${h.menu_name||'—'}</div>
+          <!-- Restaurant et préférence boisson -->
           <div style="font-size:12px;color:var(--muted)">${h.restaurant_name||'—'} • ${DRINK_LABELS[h.drink_preference]||''}</div>
+          <!-- Date de la commande formatée -->
           <div style="font-size:11px;color:var(--muted)">${formatDate(h.order_date)}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
+          <!-- Badge coloré selon l'action (vert=créé, rouge=supprimé, bleu=modifié) -->
           <span class="badge badge-${h.action==='created'?'validated':h.action==='deleted'?'danger':'info'}">${h.action}</span>
+          <!-- Bouton pour supprimer cet item de l'historique -->
           <button class="btn btn-outline btn-sm" onclick="delHistItem(${h.id})">🗑</button>
         </div>
       </div>
     `).join('');
-  } catch(e) {}
+  } catch(e) {
+    // Erreur silencieuse — la liste reste vide
+  }
 }
 
+/**
+ * delHistItem — Supprime un item individuel de l'historique.
+ * Appel API : DELETE /api/employee/history/:id
+ * Rafraîchit la liste après suppression.
+ * @param {number} id - Identifiant de l'entrée d'historique à supprimer
+ */
 async function delHistItem(id) {
   await apiFetch(`/api/employee/history/${id}`, { method: 'DELETE' }, empToken);
-  loadEmpHistory();
+  loadEmpHistory(); // Rafraîchit la liste
 }
 
+/**
+ * clearHistory — Vide tout l'historique après confirmation utilisateur.
+ * Appel API : DELETE /api/employee/history
+ * Rafraîchit la liste après suppression.
+ */
 async function clearHistory() {
+  // Confirmation avant suppression massive
   if (!confirm('Vider tout l\'historique ?')) return;
   await apiFetch('/api/employee/history', { method: 'DELETE' }, empToken);
-  toast('Historique vidé', 'info'); loadEmpHistory();
+  toast('Historique vidé', 'info');
+  loadEmpHistory(); // Rafraîchit la liste (affichera l'état vide)
 }
 
-// ── Ratings page ──────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// MODULE : PAGE MES NOTES
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * loadRatingsPage — Initialise la page des notes de plats.
+ * Affiche un message d'invitation à noter le repas du jour
+ * avec un bouton d'accès rapide au modal de notation.
+ */
 async function loadRatingsPage() {
   const el = document.getElementById('ratingsList');
   el.innerHTML = `
     <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Pour noter un plat, cliquez sur <strong>"⭐ Noter"</strong> après avoir passé votre commande du jour.</p>
+    <!-- Bouton de raccourci pour ouvrir directement le modal de notation -->
     <button class="btn btn-primary" onclick="rateCurrentOrder()">⭐ Noter mon repas du jour</button>
   `;
 }
 
-// ── Profile ───────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// MODULE : PROFIL EMPLOYÉ
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * loadEmpProfile — Charge et affiche les données du profil de l'employé.
+ * Appel API : GET /api/employee/profile
+ * Met à jour : photo de profil, informations affichées, avatar sidebar.
+ */
 async function loadEmpProfile() {
   try {
     const p = await apiFetch('/api/employee/profile', {}, empToken);
+
+    // Affichage de la photo de profil si elle existe
     if (p.photo_url) {
       document.getElementById('empPhotoImg').src = p.photo_url;
       document.getElementById('empPhotoImg').style.display = 'block';
       document.getElementById('empPhotoPreview').style.background = 'transparent';
+      // Mise à jour de l'avatar dans la sidebar
       document.getElementById('sidebarAvatar').innerHTML = `<img src="${p.photo_url}" style="width:100%;height:100%;object-fit:cover">`;
     }
+
+    // Injection des informations de profil (nom, ID, email)
     document.getElementById('profileInfo').innerHTML = `
       <div>👤 <strong>${p.first_name} ${p.last_name}</strong></div>
       <div style="margin-top:4px">🪪 ID: <strong>${p.employee_id}</strong></div>
       <div style="margin-top:4px">📧 ${p.email}</div>
     `;
+
+    // Second passage pour s'assurer que la photo est bien affichée
     if (p.photo_url) {
       const img = document.getElementById('empPhotoImg');
       img.src = p.photo_url; img.style.display = 'block';
       document.getElementById('empPhotoPreview').style.background = 'transparent';
     }
+
+    // Mise à jour de l'avatar sidebar avec style d'image arrondie
     const av = document.getElementById('sidebarAvatar');
     if (p.photo_url) { av.innerHTML = `<img src="${p.photo_url}" style="width:100%;height:100%;object-fit:cover;border-radius:9px">`; }
+
+    // Réactive les toggles de visibilité des champs mot de passe
     initPasswordToggles();
-  } catch(e) {}
+  } catch(e) {
+    // Erreur silencieuse — le profil reste vide
+  }
 }
 
+/**
+ * handleEmpPhoto — Gère l'upload d'une nouvelle photo de profil.
+ * Lit le fichier sélectionné, l'encode en Base64, affiche l'aperçu
+ * et envoie la photo à l'API pour persistance.
+ * Appel API : PUT /api/employee/profile { photoUrl: base64 }
+ * @param {HTMLInputElement} input - L'élément input[type=file] déclencheur
+ */
 async function handleEmpPhoto(input) {
+  // Vérifie qu'un fichier a bien été sélectionné
   if (!input.files[0]) return;
+
+  // Conversion du fichier image en chaîne Base64 (via utils.js)
   const b64 = await readFileAsBase64(input.files[0]);
+
+  // Affichage immédiat de l'aperçu (avant même la confirmation API)
   document.getElementById('empPhotoImg').src = b64;
   document.getElementById('empPhotoImg').style.display = 'block';
   document.getElementById('empPhotoPreview').style.background = 'transparent';
+
   try {
+    // Envoi de la photo encodée à l'API pour sauvegarde
     await apiFetch('/api/employee/profile', { method: 'PUT', body: JSON.stringify({ photoUrl: b64 }) }, empToken);
+
+    // Mise à jour de l'avatar dans la sidebar
     document.getElementById('sidebarAvatar').innerHTML = `<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
     toast('Photo mise à jour !', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) {
+    toast(e.message, 'error');
+  }
 }
 
+/**
+ * changePassword — Met à jour le mot de passe de l'employé.
+ * Valide les champs : non vide, correspondance, longueur minimale (6 car.).
+ * Appel API : PUT /api/employee/profile { newPassword }
+ * En cas de succès : efface les champs et affiche un toast de confirmation.
+ */
 async function changePassword() {
   const pwd = document.getElementById('newPwd').value;
   const pwd2 = document.getElementById('newPwd2').value;
+
+  // Validations côté client
   if (!pwd) { toast('Entrez un nouveau mot de passe', 'error'); return; }
   if (pwd !== pwd2) { toast('Les mots de passe ne correspondent pas', 'error'); return; }
   if (pwd.length < 6) { toast('Minimum 6 caractères', 'error'); return; }
+
   try {
+    // Envoi du nouveau mot de passe à l'API
     await apiFetch('/api/employee/profile', { method: 'PUT', body: JSON.stringify({ newPassword: pwd }) }, empToken);
     toast('Mot de passe changé !', 'success');
+
+    // Nettoyage des champs après succès
     document.getElementById('newPwd').value = ''; document.getElementById('newPwd2').value = '';
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) {
+    toast(e.message, 'error');
+  }
 }
 
-// ── Rating modal ──────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// MODULE : MODAL DE NOTATION D'UN REPAS
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * Correspondance entre les valeurs numériques et les libellés de notation.
+ * Index 0 réservé (non utilisé), index 1 à 5 correspondent aux étoiles.
+ */
 const ratingLabels = ['', 'Pas terrible 😕', 'Assez bon 🙂', 'Bon 😊', 'Délicieux 😋', 'Exquis 🤩'];
+
+/**
+ * openRateModal — Ouvre le modal de notation en réinitialisant son état.
+ * Remet les étoiles à zéro, efface le commentaire et le libellé.
+ */
 function openRateModal() {
-  currentRating = 0;
-  document.getElementById('rateComment').value = '';
-  document.getElementById('ratingLabel').textContent = '';
-  document.querySelectorAll('.star').forEach(s=>s.textContent='☆');
-  document.getElementById('rateModal').classList.add('open');
+  currentRating = 0; // Réinitialise la note courante
+  document.getElementById('rateComment').value = '';      // Vide le commentaire
+  document.getElementById('ratingLabel').textContent = ''; // Efface le libellé
+  document.querySelectorAll('.star').forEach(s=>s.textContent='☆'); // Remet toutes les étoiles vides
+  document.getElementById('rateModal').classList.add('open'); // Affiche le modal
 }
 
+/**
+ * setRating — Met à jour l'affichage des étoiles selon la note choisie.
+ * Remplit les étoiles jusqu'à la valeur sélectionnée, vide les suivantes.
+ * Affiche le libellé correspondant à la note.
+ * @param {number} val - La note choisie (1 à 5)
+ */
 function setRating(val) {
   currentRating = val;
+
+  // Met à jour chaque étoile : remplie (⭐) si sa valeur <= note choisie, vide (☆) sinon
   document.querySelectorAll('.star').forEach(s => {
     s.textContent = parseInt(s.dataset.v) <= val ? '⭐' : '☆';
   });
+
+  // Affiche le libellé textuel de la note
   document.getElementById('ratingLabel').textContent = ratingLabels[val] || '';
 }
 
+/**
+ * submitRating — Soumet la note du repas à l'API.
+ * Vérifie qu'une note et une commande sont bien définies.
+ * Appel API : POST /api/employee/ratings
+ * @body { menuId, restaurantId, score, comment, orderDate }
+ * En cas de succès : affiche un toast et ferme le modal.
+ */
 async function submitRating() {
+  // Validation : une note doit être sélectionnée
   if (!currentRating) { toast('Choisissez une note', 'error'); return; }
+
+  // Validation : des données de commande doivent exister
   if (!currentRateOrder) { toast('Aucun repas à noter', 'error'); return; }
+
   try {
+    // Envoi de la note, du commentaire et des métadonnées de commande à l'API
     await apiFetch('/api/employee/ratings', { method: 'POST', body: JSON.stringify({ menuId: currentRateOrder.menuId, restaurantId: currentRateOrder.restaurantId, score: currentRating, comment: document.getElementById('rateComment').value, orderDate: currentRateOrder.date }) }, empToken);
+
+    // Confirmation de l'envoi avec le nombre d'étoiles attribuées
     toast(`Note de ${currentRating} étoile(s) envoyée !`, 'success');
+
+    // Fermeture du modal de notation
     document.getElementById('rateModal').classList.remove('open');
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) {
+    toast(e.message, 'error');
+  }
 }
 </script>
 </body>

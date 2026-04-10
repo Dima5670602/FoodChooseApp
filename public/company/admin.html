@@ -114,10 +114,15 @@
   <div class="page" id="page-orders">
     <div class="card">
       <div class="card-header">
-        <span class="card-title">Commandes du jour</span>
+        <span class="card-title">Commandes par période</span>
         <div class="date-filter">
-          <input type="date" id="ordersDateFilter" onchange="loadOrders()">
-          <select class="form-control" id="restFilter" style="width:180px;font-size:13px" onchange="loadOrders()"><option value="">Tous les restaurants</option></select>
+          <input type="date" id="ordersFrom" placeholder="Du" onchange="loadOrders()">
+          <span style="color:var(--muted);font-size:13px">au</span>
+          <input type="date" id="ordersTo" placeholder="Au" onchange="loadOrders()">
+          <select class="form-control" id="restFilter" style="width:160px;font-size:13px" onchange="loadOrders()"><option value="">Tous les restaurants</option></select>
+          <button class="btn btn-primary btn-sm" onclick="loadOrders()">🔍 Rechercher</button>
+          <button class="btn btn-outline btn-sm" onclick="exportCompanyOrdersPDF()">⬇️ PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="printCompanyOrders()">🖨️ Imprimer</button>
         </div>
       </div>
       <div class="card-body" id="ordersBody"></div>
@@ -130,13 +135,15 @@
       <div class="card-header">
         <span class="card-title">✅ Valider les commandes</span>
         <div class="date-filter">
-          <input type="date" id="validateDate">
+          <input type="date" id="validateFrom" placeholder="Du" onchange="previewValidate()">
+          <span style="color:var(--muted);font-size:13px">au</span>
+          <input type="date" id="validateTo" placeholder="Au" onchange="previewValidate()">
           <button class="btn btn-success" onclick="validateOrders()">✅ Valider toutes</button>
-          <button class="btn btn-outline btn-sm" onclick="exportPDF()">⬇️ PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="exportOrdersPDF()">⬇️ PDF</button>
         </div>
       </div>
       <div class="card-body" id="validateBody">
-        <div class="empty-state"><span class="icon">✅</span>Sélectionnez une date et validez les commandes</div>
+        <div class="empty-state"><span class="icon">✅</span>Sélectionnez une période et validez les commandes</div>
       </div>
     </div>
   </div>
@@ -329,12 +336,12 @@
 <script>
 const token = localStorage.getItem('fc_token');
 const role = localStorage.getItem('fc_role');
-if (!token || !['admin','company'].includes(role)) window.location.href = '/company/login';
+if (!token || role !== 'company') window.location.href = '/company/login';
 
 const adminName = localStorage.getItem('fc_name') || '—';
 document.getElementById('sidebarName').textContent = adminName.substring(0,22);
-document.getElementById('sidebarRole').textContent = role === 'admin' ? 'Chargé de commande' : 'Entreprise';
-document.getElementById('roleLabel').textContent = role === 'admin' ? 'Admin' : 'Entreprise';
+document.getElementById('sidebarRole').textContent = 'Entreprise';
+document.getElementById('roleLabel').textContent = 'Entreprise';
 document.getElementById('topbarDate').textContent = new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
 
 let allRestaurants = [];
@@ -359,8 +366,8 @@ initNav(null, (page) => {
   if (page === 'dashboard') loadDashboard();
   else if (page === 'allrestaurants') loadAllRestaurants();
   else if (page === 'affiliations') loadAffiliations();
-  else if (page === 'orders') { document.getElementById('ordersDateFilter').value = todayStr(); loadOrders(); }
-  else if (page === 'validate') { document.getElementById('validateDate').value = todayStr(); previewValidate(); }
+  else if (page === 'orders') { document.getElementById('ordersFrom').value = todayStr(); document.getElementById('ordersTo').value = todayStr(); loadOrders(); }
+  else if (page === 'validate') { document.getElementById('validateFrom').value = todayStr(); document.getElementById('validateTo').value = todayStr(); previewValidate(); }
   else if (page === 'invoices') loadInvoices();
   else if (page === 'employees') loadEmployees();
   else if (page === 'expenses') loadExpenses();
@@ -543,60 +550,115 @@ async function deaffiliateRest(id, name) {
 
 // ── Orders ────────────────────────────────────────────
 async function loadOrders() {
-  const date = document.getElementById('ordersDateFilter').value || todayStr();
+  const from = document.getElementById('ordersFrom').value;
+  const to = document.getElementById('ordersTo').value;
   const restId = document.getElementById('restFilter').value;
+
+  let url = '/api/admin/orders?';
+  if (from && to) {
+    url += `from=${from}&to=${to}`;
+  } else if (from) {
+    url += `from=${from}&to=${from}`;
+  } else if (to) {
+    url += `from=${to}&to=${to}`;
+  } else {
+    url += `date=${todayStr()}`;
+  }
+  if (restId) url += `&restaurantId=${restId}`;
+
+  const multiDay = from && to && from !== to;
+
   try {
-    const orders = await apiFetch(`/api/admin/orders?date=${date}${restId?'&restaurantId='+restId:''}`, {}, token);
+    const orders = await apiFetch(url, {}, token);
     const el = document.getElementById('ordersBody');
-    if (!orders.length) { el.innerHTML = '<div class="empty-state"><span class="icon">🛒</span>Aucune commande pour cette date</div>'; return; }
+    if (!orders.length) { el.innerHTML = '<div class="empty-state"><span class="icon">🛒</span>Aucune commande pour cette période</div>'; return; }
+    const total = orders.reduce((s,o)=>s+parseFloat(o.price||0),0);
+    const dateLabel = from && to ? `Du ${from} au ${to}` : `Aujourd'hui`;
     // Group by restaurant
     const byRest = {};
     orders.forEach(o=>{ if(!byRest[o.restaurant_name]) byRest[o.restaurant_name]=[]; byRest[o.restaurant_name].push(o); });
-    el.innerHTML = Object.entries(byRest).map(([rName, ords])=>`
-      <div style="margin-bottom:16px;background:#F9F1EB;border-radius:12px;padding:14px">
-        <div style="font-weight:700;font-size:14px;color:var(--brown);margin-bottom:10px">🍽 ${rName} <span style="font-size:12px;color:var(--muted);font-weight:400">— ${ords.length} commandes</span></div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>ID</th><th>Employé</th><th>Menu</th><th>Prix</th><th>Boisson</th><th>Statut</th></tr></thead>
-            <tbody>
-              ${ords.map(o=>`<tr>
-                <td style="font-size:11px;color:var(--muted)">${o.employee_id}</td>
-                <td>${o.first_name} ${o.last_name}</td>
-                <td>${o.menu_name}</td>
-                <td>${parseFloat(o.price||0).toLocaleString()} FCFA</td>
-                <td>${DRINK_LABELS[o.drink_preference]||'—'}</td>
-                <td><span class="badge badge-${o.status.includes('valid')||o.status==='confirmed'?'validated':'pending'}">${o.status}</span></td>
-              </tr>`).join('')}
-              <tr style="background:rgba(232,90,42,.06)"><td colspan="3" style="font-weight:700;padding:9px">Total ${rName}</td><td colspan="3" style="font-weight:700;padding:9px">${ords.reduce((s,o)=>s+parseFloat(o.price||0),0).toLocaleString()} FCFA</td></tr>
-            </tbody>
-          </table>
-        </div>
+    el.innerHTML = `
+      <div style="background:#FFF0EA;border-radius:12px;padding:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div style="font-size:13px;font-weight:600;color:var(--brown)">📊 ${orders.length} commande(s) — ${dateLabel}</div>
+        <div style="font-size:15px;font-weight:700;color:var(--orange)">${total.toLocaleString()} FCFA</div>
       </div>
-    `).join('');
+      ${Object.entries(byRest).map(([rName, ords])=>`
+        <div style="margin-bottom:16px;background:#F9F1EB;border-radius:12px;padding:14px">
+          <div style="font-weight:700;font-size:14px;color:var(--brown);margin-bottom:10px">🍽 ${rName} <span style="font-size:12px;color:var(--muted);font-weight:400">— ${ords.length} commande(s)</span></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>${multiDay?'<th>Date</th>':''}<th>ID</th><th>Employé</th><th>Menu</th><th>Prix</th><th>Boisson</th><th>Statut</th></tr></thead>
+              <tbody>
+                ${ords.map(o=>`<tr>
+                  ${multiDay?`<td style="font-size:12px;color:var(--muted)">${formatDate(o.order_date)}</td>`:''}
+                  <td style="font-size:11px;color:var(--muted)">${o.employee_id}</td>
+                  <td>${o.first_name} ${o.last_name}</td>
+                  <td>${o.menu_name}</td>
+                  <td>${parseFloat(o.price||0).toLocaleString()} FCFA</td>
+                  <td>${DRINK_LABELS[o.drink_preference]||'—'}</td>
+                  <td><span class="badge badge-${o.status.includes('valid')||o.status==='confirmed'?'validated':'pending'}">${o.status}</span></td>
+                </tr>`).join('')}
+                <tr style="background:rgba(232,90,42,.06)"><td colspan="${multiDay?4:3}" style="font-weight:700;padding:9px">Total ${rName}</td><td colspan="3" style="font-weight:700;padding:9px">${ords.reduce((s,o)=>s+parseFloat(o.price||0),0).toLocaleString()} FCFA</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `).join('')}
+    `;
   } catch(e) { toast('Erreur', 'error'); }
+}
+
+function exportCompanyOrdersPDF() {
+  const from = document.getElementById('ordersFrom').value;
+  const to = document.getElementById('ordersTo').value;
+  if (!from || !to) { toast('Veuillez sélectionner les dates de début et de fin', 'error'); return; }
+  fetch(`/api/admin/orders/export-pdf?from=${from}&to=${to}`, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => r.blob()).then(blob => { const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`commandes_${from}_${to}.pdf`; a.click(); URL.revokeObjectURL(url); })
+    .catch(()=>toast('Erreur PDF','error'));
+}
+
+function printCompanyOrders() {
+  const from = document.getElementById('ordersFrom').value;
+  const to = document.getElementById('ordersTo').value;
+  if (!from || !to) { toast('Veuillez sélectionner les dates de début et de fin', 'error'); return; }
+  fetch(`/api/admin/orders/export-pdf?from=${from}&to=${to}`, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => r.blob()).then(blob => { const url=URL.createObjectURL(blob); const w=window.open(url); if(w) w.onload=()=>w.print(); })
+    .catch(()=>toast('Erreur impression','error'));
 }
 
 // ── Validate ──────────────────────────────────────────
 async function previewValidate() {
-  const date = document.getElementById('validateDate').value || todayStr();
+  const from = document.getElementById('validateFrom').value;
+  const to = document.getElementById('validateTo').value;
+  let url = '/api/admin/orders?';
+  
+  if (from && to) {
+    url += `from=${from}&to=${to}`;
+  } else {
+    url += `date=${todayStr()}`;
+  }
+  
   try {
-    const orders = await apiFetch(`/api/admin/orders?date=${date}`, {}, token);
+    const orders = await apiFetch(url, {}, token);
     const el = document.getElementById('validateBody');
-    if (!orders.length) { el.innerHTML = '<div class="empty-state"><span class="icon">✅</span>Aucune commande pour cette date</div>'; return; }
+    if (!orders.length) { el.innerHTML = '<div class="empty-state"><span class="icon">✅</span>Aucune commande pour cette période</div>'; return; }
     const pending = orders.filter(o=>o.status==='pending').length;
+    const dateLabel = from && to ? `du ${from} au ${to}` : `au ${todayStr()}`;
+    const total = orders.reduce((s, o) => s + parseFloat(o.price || 0), 0);
     el.innerHTML = `
       <div style="background:#FFF0EA;border-radius:12px;padding:14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
         <div>
-          <div style="font-size:14px;font-weight:700;color:var(--brown)">${orders.length} commandes au total</div>
+          <div style="font-size:14px;font-weight:700;color:var(--brown)">${orders.length} commandes — ${dateLabel}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:3px">${pending} en attente de validation</div>
         </div>
-        <div style="font-size:16px;font-weight:700;color:var(--orange)">${orders.reduce((s,o)=>s+parseFloat(o.price||0),0).toLocaleString()} FCFA</div>
+        <div style="font-size:16px;font-weight:700;color:var(--orange)">${total.toLocaleString()} FCFA</div>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Employé</th><th>Restaurant</th><th>Menu</th><th>Prix</th><th>Statut</th></tr></thead>
+          <thead><tr><th>Date</th><th>Employé</th><th>Restaurant</th><th>Menu</th><th>Prix</th><th>Statut</th></tr></thead>
           <tbody>
             ${orders.map(o=>`<tr>
+              <td style="font-size:12px;color:var(--muted)">${formatDate(o.order_date)}</td>
               <td>${o.first_name} ${o.last_name}</td>
               <td>${o.restaurant_name}</td>
               <td>${o.menu_name}</td>
@@ -611,8 +673,10 @@ async function previewValidate() {
 }
 
 async function validateOrders() {
-  const date = document.getElementById('validateDate').value || todayStr();
-  if (!confirm(`Valider toutes les commandes du ${formatDate(date)} ?`)) return;
+  const from = document.getElementById('validateFrom').value;
+  const to = document.getElementById('validateTo').value;
+  const date = from || todayStr();
+  if (!confirm(`Valider toutes les commandes du ${date} ?`)) return;
   try {
     const r = await apiFetch('/api/admin/orders/validate', { method: 'POST', body: JSON.stringify({ date }) }, token);
     toast(`${r.validated} commandes validées ! Les restaurants ont été notifiés.`, 'success');
@@ -620,11 +684,16 @@ async function validateOrders() {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-function exportPDF() {
-  const date = document.getElementById('validateDate').value || todayStr();
-  fetch(`/api/admin/export-pdf?date=${date}`, { headers: { Authorization: `Bearer ${token}` } })
-    .then(r=>r.blob()).then(blob=>{ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`commandes_${date}.pdf`; a.click(); URL.revokeObjectURL(url); })
+function exportOrdersPDF() {
+  const from = document.getElementById('validateFrom').value;
+  const to = document.getElementById('validateTo').value;
+  
+  if (!from || !to) { toast('Veuillez sélectionner les dates de début et de fin', 'error'); return; }
+  
+  fetch(`/api/admin/orders/export-pdf?from=${from}&to=${to}`, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => r.blob()).then(blob => { const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`commandes_${from}_${to}.pdf`; a.click(); URL.revokeObjectURL(url); })
     .catch(()=>toast('Erreur PDF','error'));
+}
 }
 
 // ── Invoices ──────────────────────────────────────────
@@ -902,17 +971,19 @@ async function sendAdminVoiceMsg(restId, audioData) {
 
 function renderAdminMsg(m) {
   const cls = m.sender_type === 'company' ? 'msg-out' : 'msg-in';
-  if (m.message_type === 'voice' && m.audio_data) {
-    return `<div class="msg ${cls}"><div class="msg-voice"><div class="voice-badge">🎙 Message vocal</div><audio controls src="${m.audio_data}"></audio><div class="msg-time">${timeAgo(m.created_at)}</div></div></div>`;
+  const audioSrc = m.audio_url || m.audio_data;
+  const fileSrc = m.file_url || m.file_data;
+  if (m.message_type === 'voice' && audioSrc) {
+    return `<div class="msg ${cls}"><div class="msg-voice"><div class="voice-badge">🎙 Message vocal</div><audio controls src="${audioSrc}"></audio><div class="msg-time">${timeAgo(m.created_at)}</div></div></div>`;
   }
-  if (m.message_type === 'file' && m.file_data) {
+  if (m.message_type === 'file' && fileSrc) {
     let inner = '';
     if (m.file_mime?.startsWith('image/')) {
-      inner = `<img src="${m.file_data}" onclick="window.open('${m.file_data}','_blank')" alt="${m.file_name||'image'}" style="max-width:220px;max-height:200px;border-radius:9px;display:block;cursor:pointer;object-fit:cover">`;
+      inner = `<img src="${fileSrc}" onclick="window.open('${fileSrc}','_blank')" alt="${m.file_name||'image'}" style="max-width:220px;max-height:200px;border-radius:9px;display:block;cursor:pointer;object-fit:cover">`;
     } else if (m.file_mime?.startsWith('video/')) {
-      inner = `<video controls style="max-width:220px;border-radius:9px;display:block;background:#000"><source src="${m.file_data}" type="${m.file_mime}"></video>`;
+      inner = `<video controls style="max-width:220px;border-radius:9px;display:block;background:#000"><source src="${fileSrc}" type="${m.file_mime}"></video>`;
     } else {
-      inner = `<a class="msg-file-doc" href="${m.file_data}" download="${m.file_name||'document'}">📄<span>${m.file_name||'Document'}</span></a>`;
+      inner = `<a class="msg-file-doc" href="${fileSrc}" download="${m.file_name||'document'}">📄<span>${m.file_name||'Document'}</span></a>`;
     }
     const caption = m.content && !['📷 Photo','🎬 Vidéo'].includes(m.content) && !m.content.startsWith('📄') ? `<div style="font-size:12px;margin-top:3px">${m.content}</div>` : '';
     return `<div class="msg ${cls}"><div class="msg-file">${inner}${caption}<div class="msg-time">${timeAgo(m.created_at)}</div></div></div>`;
@@ -986,9 +1057,9 @@ loadAllRestaurants();
 // ── Settings ──────────────────────────────────────────
 async function loadSettings() {
   initPasswordToggles();
-  // Afficher le libellé selon le rôle
+  // Libellé du champ mot de passe (l'entreprise est toujours son propre admin)
   const label = document.getElementById('coPwLabel');
-  if (label) label.textContent = role === 'admin' ? 'Mot de passe actuel (admin)' : 'Mot de passe actuel';
+  if (label) label.textContent = 'Mot de passe actuel';
   // Load company logo if available
   try {
     const r = await apiFetch('/api/admin/company-profile', {}, token);

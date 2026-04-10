@@ -3,40 +3,62 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>FoodChooseApp — Inscription Restaurant</title>
+  <!-- Polices Google : Playfair Display pour les titres, DM Sans pour le corps de texte -->
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <!-- Feuille de style principale de l'application -->
   <link rel="stylesheet" href="/assets/css/main.css">
   <style>
+    /* Fond sombre couvrant toute la hauteur de la fenêtre, centré horizontalement et verticalement */
     body{background:var(--brown);display:flex;align-items:center;justify-content:center;padding:24px;min-height:100vh}
+    /* Dégradé radial décoratif fixe, côté gauche */
     .bg{position:fixed;inset:0;z-index:0;background:radial-gradient(circle at 25% 50%,rgba(232,90,42,.15),transparent 50%)}
+    /* Grille de lignes fines pour l'effet de texture de fond */
     .grid{position:fixed;inset:0;z-index:0;background-image:linear-gradient(rgba(255,248,243,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,248,243,.03) 1px,transparent 1px);background-size:40px 40px}
+    /* Carte d'inscription restaurant (plus large pour les 3 étapes du formulaire multi-pages) */
     .auth-card{position:relative;z-index:1;background:var(--cream);border-radius:22px;padding:40px;width:100%;max-width:680px;box-shadow:0 40px 80px rgba(0,0,0,.4);animation:cardIn .6s cubic-bezier(.16,1,.3,1) both}
+    /* Animation d'entrée de la carte */
     @keyframes cardIn{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+    /* Bloc logo / en-tête de la carte */
     .auth-logo{text-align:center;margin-bottom:28px}
     .auth-logo .icon{font-size:36px;display:block;margin-bottom:6px}
     .auth-logo h1{font-family:'Playfair Display',serif;font-size:24px;font-weight:900;color:var(--brown)}
     .auth-logo h1 span{color:var(--orange)}
     .auth-logo p{font-size:13px;color:var(--muted);margin-top:4px}
+    /* Titre de section (séparateur visuel entre les groupes de champs) */
     .section-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+    /* Conteneur des cases à cocher de spécialités culinaires */
     .specialties-wrap{display:flex;flex-wrap:wrap;gap:0;border:1.5px solid var(--border);border-radius:10px;padding:10px;background:white}
+    /* Section des modes de paiement avec bordure et fond blanc */
     .pay-section{border:1.5px solid var(--border);border-radius:10px;padding:14px;background:white}
+    /* Indicateur de progression à 3 étapes affiché en haut de la carte */
     .step-indicator{display:flex;gap:8px;margin-bottom:24px;justify-content:center}
+    /* Barre d'une étape : gris par défaut */
     .step{width:28px;height:6px;border-radius:3px;background:var(--border)}
+    /* Barre d'une étape déjà atteinte ou en cours : orange */
     .step.done{background:var(--orange)}
+    /* Bouton retour à l'étape précédente (style discret) */
     .btn-back{color:var(--muted);font-size:13px;background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;padding:0;display:flex;align-items:center;gap:4px}
     .btn-back:hover{color:var(--orange)}
+    /* État de succès affiché après la création du compte (remplace les étapes) */
     .success-state{text-align:center;padding:20px 0}
     .success-state .icon{font-size:60px;margin-bottom:14px}
     .success-state h2{font-family:'Playfair Display',serif;font-size:22px;color:var(--brown);margin-bottom:8px}
     .success-state p{color:var(--muted);font-size:14px;margin-bottom:20px}
+    /* Bloc d'affichage des erreurs de validation (masqué par défaut) */
     #errorMsg{background:#FEE2E2;color:#991B1B;border-radius:10px;padding:11px 14px;font-size:13px;margin-top:12px;display:none;border:1px solid #FCA5A5}
+    /* Classe ajoutée dynamiquement pour rendre le message d'erreur visible */
     #errorMsg.show{display:block}
   </style>
 </head>
 <body>
+<!-- Couches décoratives d'arrière-plan -->
 <div class="bg"></div><div class="grid"></div>
+<!-- Conteneur des notifications toast (messages temporaires) -->
 <div id="toastContainer"></div>
 
+<!-- Carte principale du formulaire d'inscription en plusieurs étapes -->
 <div class="auth-card">
+  <!-- En-tête : icône magasin et nom de l'application -->
   <div class="auth-logo">
     <span class="icon">🏪</span>
     <h1>Food<span>Choose</span>App</h1>
@@ -44,6 +66,8 @@
   </div>
 
   <!-- Step indicator -->
+  <!-- Indicateur de progression : 3 barres colorées selon l'étape courante -->
+  <!-- s1, s2, s3 reçoivent la classe 'done' dynamiquement via goStep() -->
   <div class="step-indicator">
     <div class="step done" id="s1"></div>
     <div class="step" id="s2"></div>
@@ -51,6 +75,7 @@
   </div>
 
   <!-- STEP 1 — Infos générales -->
+  <!-- Étape 1 : informations d'identification du restaurant (nom, téléphone, adresse, email) -->
   <div id="step1">
     <div class="section-title">📍 Informations générales</div>
     <div class="form-row">
@@ -77,27 +102,39 @@
       <label>Email *</label>
       <input class="form-control" id="restEmail" type="email" placeholder="restaurant@email.com">
     </div>
+    <!-- Bouton pour passer à l'étape 2 (déclenche la validation des champs de l'étape 1) -->
     <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="goStep(2)">Suivant →</button>
+    <!-- Lien vers la connexion pour les restaurants déjà inscrits -->
     <p style="text-align:center;margin-top:12px;font-size:13px;color:var(--muted)">Déjà un compte ? <a href="/restaurant/login" style="color:var(--orange)">Se connecter</a></p>
+    <!-- Lien de retour vers la page d'accueil -->
     <p style="text-align:center;margin-top:6px"><a href="/" style="font-size:12.5px;color:var(--muted);text-decoration:none">← Retour à l'accueil</a></p>
   </div>
 
   <!-- STEP 2 — Paiement & Spécialités -->
+  <!-- Étape 2 : sélection des modes de paiement acceptés et des spécialités culinaires -->
+  <!-- Les champs sont générés dynamiquement via renderPaymentFields() et renderSpecialties() -->
   <div id="step2" style="display:none">
+    <!-- Bouton retour vers l'étape 1 -->
     <button class="btn-back" onclick="goStep(1)">← Retour</button>
     <div class="section-title" style="margin-top:14px">💳 Modes de paiement</div>
+    <!-- Conteneur des cases à cocher des modes de paiement (rempli dynamiquement) -->
     <div class="pay-section" id="paymentSection"></div>
     <div class="section-title">🍽 Spécialités culinaires</div>
+    <!-- Conteneur des cases à cocher des spécialités (rempli dynamiquement) -->
     <div class="specialties-wrap" id="specialtiesContainer"></div>
+    <!-- Bouton pour passer à l'étape 3 -->
     <button class="btn btn-primary" style="width:100%;margin-top:18px" onclick="goStep(3)">Suivant →</button>
   </div>
 
   <!-- STEP 3 — Mot de passe -->
+  <!-- Étape 3 : création et confirmation du mot de passe du compte restaurant -->
   <div id="step3" style="display:none">
+    <!-- Bouton retour vers l'étape 2 -->
     <button class="btn-back" onclick="goStep(2)">← Retour</button>
     <div class="section-title" style="margin-top:14px">🔐 Sécurité</div>
     <div class="form-group">
       <label>Mot de passe *</label>
+      <!-- Champ mot de passe avec bascule afficher/masquer -->
       <div class="pw-wrap">
         <input class="form-control" id="restPwd" type="password" placeholder="Minimum 6 caractères">
         <button class="pw-toggle" type="button">👁</button>
@@ -105,18 +142,22 @@
     </div>
     <div class="form-group">
       <label>Confirmer le mot de passe *</label>
+      <!-- Champ de confirmation avec bascule afficher/masquer -->
       <div class="pw-wrap">
         <input class="form-control" id="restPwd2" type="password" placeholder="Répétez le mot de passe">
         <button class="pw-toggle" type="button">👁</button>
       </div>
     </div>
+    <!-- Zone d'affichage des messages d'erreur de validation -->
     <div id="errorMsg"></div>
+    <!-- Bouton de soumission final du formulaire d'inscription -->
     <button class="btn btn-primary" id="registerBtn" style="width:100%;margin-top:12px" onclick="register()">
       🍽 Créer mon compte restaurant
     </button>
   </div>
 
   <!-- SUCCESS -->
+  <!-- État de succès affiché après la création du compte (les étapes sont masquées) -->
   <div id="successState" style="display:none" class="success-state">
     <div class="icon">🎉</div>
     <h2>Compte créé avec succès !</h2>
@@ -125,30 +166,63 @@
   </div>
 </div>
 
+<!-- Utilitaires partagés : apiFetch, toast, initPasswordToggles,
+     renderPaymentFields, renderSpecialties, getPaymentTypes, getSelectedSpecialties -->
 <script src="/assets/js/utils.js"></script>
 <script>
+// Initialise les boutons bascule afficher/masquer sur tous les champs mot de passe
 initPasswordToggles();
 
+/**
+ * Navigue entre les étapes du formulaire d'inscription en plusieurs étapes.
+ *
+ * Comportement :
+ *  - Valide les champs de l'étape 1 avant d'autoriser le passage à l'étape 2.
+ *  - Affiche uniquement l'étape demandée, masque les autres.
+ *  - Met à jour l'indicateur de progression (barres colorées s1/s2/s3).
+ *  - Lors du passage à l'étape 2, génère dynamiquement les champs de paiement
+ *    et les spécialités via renderPaymentFields() et renderSpecialties().
+ *
+ * @param {number} n - Numéro de l'étape cible (1, 2 ou 3)
+ */
 function goStep(n) {
-  // Validate before moving
+  // Validation avant de quitter l'étape 1
   if (n === 2) {
     if (!document.getElementById('restName').value.trim()) { return toast('Nom requis', 'error'); }
     if (!document.getElementById('restEmail').value.trim()) { return toast('Email requis', 'error'); }
     if (!document.getElementById('restPhone').value.trim()) { return toast('Téléphone requis', 'error'); }
   }
+  // Afficher uniquement l'étape sélectionnée et mettre à jour les barres de progression
   [1,2,3].forEach(i => {
     const el = document.getElementById(`step${i}`);
+    // Afficher uniquement l'étape courante, masquer les autres
     if (el) el.style.display = i === n ? 'block' : 'none';
     const s = document.getElementById(`s${i}`);
+    // Colorer en orange les barres des étapes déjà complétées ou en cours
     if (s) s.classList.toggle('done', i <= n);
   });
+  // Générer dynamiquement les champs de paiement et de spécialités à l'étape 2
   if (n === 2) {
     renderPaymentFields('paymentSection');
     renderSpecialties('specialtiesContainer');
   }
 }
 
+/**
+ * Valide et soumet le formulaire d'inscription du restaurant (étape finale).
+ *
+ * Étapes :
+ *  1. Lire et nettoyer toutes les valeurs des champs collectés sur les 3 étapes.
+ *  2. Valider la correspondance et la longueur des mots de passe.
+ *  3. Récupérer les modes de paiement et spécialités sélectionnés (via utils.js).
+ *  4. Désactiver le bouton pour éviter les doubles soumissions.
+ *  5. Appeler POST /api/auth/restaurant/register avec toutes les données.
+ *  6. En cas de succès : masquer l'étape 3 et afficher l'état de succès.
+ *  7. En cas d'erreur : afficher le message retourné par l'API.
+ *  8. Dans tous les cas : réactiver le bouton.
+ */
 async function register() {
+  // Récupération et nettoyage des valeurs saisies sur l'ensemble des étapes
   const name = document.getElementById('restName').value.trim();
   const phone = document.getElementById('restPhone').value.trim();
   const address = document.getElementById('restAddress').value.trim();
@@ -156,27 +230,39 @@ async function register() {
   const email = document.getElementById('restEmail').value.trim();
   const pwd = document.getElementById('restPwd').value;
   const pwd2 = document.getElementById('restPwd2').value;
+
+  // Référence au bloc d'erreur et réinitialisation de son état
   const err = document.getElementById('errorMsg');
   err.classList.remove('show');
 
+  // Validation : les deux mots de passe doivent correspondre
   if (pwd !== pwd2) { err.textContent = 'Les mots de passe ne correspondent pas'; err.classList.add('show'); return; }
+  // Validation : longueur minimale du mot de passe
   if (pwd.length < 6) { err.textContent = 'Mot de passe trop court (min 6 caractères)'; err.classList.add('show'); return; }
 
+  // Récupérer la liste des types de paiement cochés dans le conteneur de l'étape 2
   const paymentTypes = getPaymentTypes('paymentSection');
+  // Récupérer la liste des spécialités culinaires sélectionnées dans l'étape 2
   const specialties = getSelectedSpecialties('specialtiesContainer');
+
+  // Désactiver le bouton et afficher un indicateur de chargement
   const btn = document.getElementById('registerBtn');
   btn.disabled = true; btn.textContent = '⏳ Création...';
 
   try {
+    // Appel API d'inscription restaurant : envoie toutes les données du restaurant
     await apiFetch('/api/auth/restaurant/register', {
       method: 'POST',
       body: JSON.stringify({ name, phone, address, location, email, paymentTypes, specialties, password: pwd })
     });
+    // Masquer l'étape 3 et afficher l'état de succès
     document.getElementById('step3').style.display = 'none';
     document.getElementById('successState').style.display = 'block';
   } catch(e) {
+    // Afficher le message d'erreur retourné par l'API (ex. email déjà utilisé)
     err.textContent = e.message; err.classList.add('show');
   } finally {
+    // Réactiver le bouton dans tous les cas
     btn.disabled = false; btn.textContent = '🍽 Créer mon compte restaurant';
   }
 }

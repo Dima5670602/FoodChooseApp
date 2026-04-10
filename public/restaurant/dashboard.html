@@ -85,12 +85,14 @@
       <div class="card-header">
         <span class="card-title">Commandes reçues</span>
         <div class="date-filter">
-          <input type="date" id="ordersDate" onchange="loadOrders()">
-          <select id="orderPeriod" onchange="loadOrdersByPeriod()">
-            <option value="">Jour sélectionné</option>
-            <option value="week">Cette semaine</option>
-            <option value="month">Ce mois</option>
+          <input type="date" id="ordersFrom" placeholder="Du" onchange="loadOrders()">
+          <span style="color:var(--muted);font-size:13px">au</span>
+          <input type="date" id="ordersTo" placeholder="Au" onchange="loadOrders()">
+          <select id="companyFilter" style="width:150px;font-size:13px" onchange="loadOrders()">
+            <option value="">Toutes les entreprises</option>
           </select>
+          <button class="btn btn-primary btn-sm" onclick="loadOrders()">🔍 Rechercher</button>
+          <button class="btn btn-outline btn-sm" onclick="exportOrdersPDF()">⬇️ PDF</button>
         </div>
       </div>
       <div class="card-body" id="batchesList"></div>
@@ -319,7 +321,7 @@ function logout() { localStorage.clear(); window.location.href = '/'; }
 initSidebar();
 initNav(null, (page) => {
   if (page === 'dashboard') loadDashboard();
-  else if (page === 'orders') { document.getElementById('ordersDate').value = todayStr(); loadOrders(); }
+  else if (page === 'orders') { loadCompaniesForFilter(); loadOrders(); }
   else if (page === 'menus') loadMenus();
   else if (page === 'ratings') loadRatings();
   else if (page === 'profile') loadProfile();
@@ -347,7 +349,19 @@ async function loadDashboard() {
         </div>
       `).join('');
     } else { chart.innerHTML = '<div style="color:var(--muted);font-size:13px;width:100%;text-align:center">Aucune donnée</div>'; }
-    // Ratings
+    // Ratings, budget and top clients
+    const topClientsHtml = s.topClients && s.topClients.length 
+      ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+           <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🏆 Top 3 Clients</div>
+           ${s.topClients.map((c, i) => `
+             <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px">
+               <span style="color:var(--brown)"><span style="color:var(--orange);font-weight:700">${i+1}.</span> ${c.name}</span>
+               <span style="color:var(--orange);font-weight:600">${parseFloat(c.total_revenue||0).toLocaleString()} FCA</span>
+             </div>
+           `).join('')}
+         </div>`
+      : '';
+    
     document.getElementById('ratingStats').innerHTML = `
       <div style="text-align:center;margin-bottom:14px">
         <div style="font-size:40px;font-family:Playfair Display,serif;font-weight:700;color:var(--brown)">${s.avgRating}</div>
@@ -356,62 +370,104 @@ async function loadDashboard() {
       </div>
       <hr style="border:none;border-top:1px solid var(--border);margin:12px 0">
       <div style="font-size:13px;color:var(--muted)">🏢 <strong style="color:var(--brown)">${s.companies}</strong> entreprise(s) affiliée(s)</div>
-      <div style="font-size:13px;color:var(--muted);margin-top:6px">💰 Revenu semaine : <strong style="color:var(--brown)">${(s.revenueWeek||0).toLocaleString()} FCFA</strong></div>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px">💰 Revenu semaine : <strong style="color:var(--brown)">${(s.revenueWeek||0).toLocaleString()} FCA</strong></div>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px">💵 Budget total : <strong style="color:var(--orange)">${(s.totalRevenue||0).toLocaleString()} FCA</strong></div>
+      ${topClientsHtml}
     `;
   } catch(e) { toast('Erreur tableau de bord', 'error'); }
 }
 
 // ── Orders ───────────────────────────────────────────────
-async function loadOrders() {
-  const date = document.getElementById('ordersDate').value || todayStr();
+let allCompanies = [];
+
+async function loadCompaniesForFilter() {
   try {
-    const [orders, batches] = await Promise.all([
-      apiFetch(`/api/restaurant/orders?date=${date}`, {}, token),
-      apiFetch('/api/restaurant/batches', {}, token)
-    ]);
-    const batchForDate = batches.find(b => b.batch_date === date);
+    allCompanies = await apiFetch('/api/restaurant/companies', {}, token);
+    const sel = document.getElementById('companyFilter');
+    sel.innerHTML = '<option value="">Toutes les entreprises</option>' + 
+      allCompanies.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  } catch(e) { console.error('Error loading companies:', e); }
+}
+
+async function loadOrders() {
+  const from = document.getElementById('ordersFrom').value;
+  const to = document.getElementById('ordersTo').value;
+  const companyId = document.getElementById('companyFilter').value;
+  
+  // Default to today if no dates provided
+  let url = '/api/restaurant/orders?';
+  if (from && to) {
+    url += `from=${from}&to=${to}${companyId ? '&companyId=' + companyId : ''}`;
+  } else if (from && !to) {
+    url += `from=${from}&to=${from}${companyId ? '&companyId=' + companyId : ''}`;
+  } else if (!from && to) {
+    url += `from=${to}&to=${to}${companyId ? '&companyId=' + companyId : ''}`;
+  } else {
+    url += `date=${todayStr()}${companyId ? '&companyId=' + companyId : ''}`;
+  }
+  
+  try {
+    const orders = await apiFetch(url, {}, token);
     const el = document.getElementById('batchesList');
-    if (!orders.length) { el.innerHTML = '<div class="empty-state"><span class="icon">🛒</span>Aucune commande pour cette date</div>'; return; }
+    if (!orders.length) { el.innerHTML = '<div class="empty-state"><span class="icon">🛒</span>Aucune commande pour cette période</div>'; return; }
+    
     // Group by company
     const byCompany = {};
     orders.forEach(o => { if (!byCompany[o.company_name]) byCompany[o.company_name] = []; byCompany[o.company_name].push(o); });
-    el.innerHTML = Object.entries(byCompany).map(([co, ords]) => `
-      <div style="background:#F9F1EB;border-radius:12px;padding:16px;margin-bottom:14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="font-weight:700;font-size:15px;color:var(--brown)">🏢 ${co}</div>
-          <span class="badge badge-${ords[0].status==='pending'?'pending':ords[0].status.includes('valid')?'validated':ords[0].status}">${ords[0].status}</span>
-        </div>
-        ${batchForDate && batchForDate.company_name === co ? `
-          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-            ${batchForDate.status==='pending'?`<button class="btn btn-success btn-sm" onclick="confirmBatch(${batchForDate.id})">✅ Confirmer réception</button>`:''}
-            ${batchForDate.status==='confirmed'?`<button class="btn btn-primary btn-sm" onclick="openInvoiceModal(${batchForDate.id}, '${co}')">🧾 Envoyer facture</button>`:''}
-            ${batchForDate.status==='invoiced'?'<span style="color:var(--success);font-size:13px;font-weight:600">✓ Facture envoyée</span>':''}
-          </div>
-        ` : ''}
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <tr style="background:rgba(44,24,16,.05)"><th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Employé</th><th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Menu</th><th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Prix</th><th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Boisson</th></tr>
-          ${ords.map(o=>`<tr><td style="padding:7px">${o.first_name} ${o.last_name}</td><td style="padding:7px">${o.menu_name}</td><td style="padding:7px">${parseFloat(o.price||0).toLocaleString()} FCFA</td><td style="padding:7px">${DRINK_LABELS[o.drink_preference]||'—'}</td></tr>`).join('')}
-          <tr style="background:rgba(232,90,42,.08)"><td colspan="2" style="padding:7px;font-weight:700">Total</td><td colspan="2" style="padding:7px;font-weight:700">${ords.reduce((s,o)=>s+parseFloat(o.price||0),0).toLocaleString()} FCFA</td></tr>
-        </table>
+    
+    const total = orders.reduce((s, o) => s + parseFloat(o.price || 0), 0);
+    const dateLabel = from && to ? `Du ${from} au ${to}` : (from ? `À partir de ${from}` : (to ? `Jusqu'au ${to}` : `Aujourd'hui`));
+    
+    el.innerHTML = `
+      <div style="background:#FFF0EA;border-radius:12px;padding:14px;margin-bottom:14px;font-size:14px">
+        📊 <strong>${orders.length}</strong> commandes — <strong>${total.toLocaleString()} FCFA</strong>
+        <span style="color:var(--muted);font-size:12px;margin-left:8px">${dateLabel}</span>
       </div>
-    `).join('');
+      ${Object.entries(byCompany).map(([co, ords]) => `
+        <div style="background:#F9F1EB;border-radius:12px;padding:16px;margin-bottom:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-weight:700;font-size:15px;color:var(--brown)">🏢 ${co}</div>
+            <span style="font-size:12px;color:var(--muted)">${ords.length} commande(s)</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <tr style="background:rgba(44,24,16,.05)">
+              <th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Date</th>
+              <th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Employé</th>
+              <th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Menu</th>
+              <th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Prix</th>
+            </tr>
+            ${ords.map(o=>`<tr>
+              <td style="padding:7px;font-size:12px;color:var(--muted)">${formatDate(o.order_date)}</td>
+              <td style="padding:7px">${o.first_name} ${o.last_name}</td>
+              <td style="padding:7px">${o.menu_name}</td>
+              <td style="padding:7px">${parseFloat(o.price||0).toLocaleString()} FCFA</td>
+            </tr>`).join('')}
+            <tr style="background:rgba(232,90,42,.08)">
+              <td colspan="2" style="padding:7px;font-weight:700">Total ${co}</td>
+              <td colspan="2" style="padding:7px;font-weight:700">${ords.reduce((s,o)=>s+parseFloat(o.price||0),0).toLocaleString()} FCFA</td>
+            </tr>
+          </table>
+        </div>
+      `).join('')}
+    `;
   } catch(e) { toast('Erreur commandes', 'error'); }
 }
 
-async function loadOrdersByPeriod() {
-  const period = document.getElementById('orderPeriod').value;
-  if (!period) { loadOrders(); return; }
-  try {
-    const orders = await apiFetch(`/api/restaurant/orders?period=${period}`, {}, token);
-    const el = document.getElementById('batchesList');
-    if (!orders.length) { el.innerHTML = '<div class="empty-state"><span class="icon">🛒</span>Aucune commande</div>'; return; }
-    const total = orders.reduce((s,o)=>s+parseFloat(o.price||0),0);
-    el.innerHTML = `<div style="background:#FFF0EA;border-radius:12px;padding:14px;margin-bottom:14px;font-size:14px">📊 <strong>${orders.length}</strong> commandes — <strong>${total.toLocaleString()} FCFA</strong></div>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Date</th><th>Entreprise</th><th>Employé</th><th>Menu</th><th>Prix</th><th>Statut</th></tr></thead>
-      <tbody>${orders.map(o=>`<tr><td>${formatDate(o.order_date)}</td><td>${o.company_name}</td><td>${o.first_name} ${o.last_name}</td><td>${o.menu_name}</td><td>${parseFloat(o.price||0).toLocaleString()}</td><td><span class="badge badge-${o.status.includes('valid')||o.status==='confirmed'?'validated':'pending'}">${o.status}</span></td></tr>`).join('')}
-      </tbody></table></div>`;
-  } catch(e) { toast('Erreur', 'error'); }
+function exportOrdersPDF() {
+  const from = document.getElementById('ordersFrom').value;
+  const to = document.getElementById('ordersTo').value;
+  const companyId = document.getElementById('companyFilter').value;
+  
+  if (!from || !to) { toast('Veuillez sélectionner les dates de début et de fin', 'error'); return; }
+  
+  let url = `/api/restaurant/orders/export-pdf?from=${from}&to=${to}`;
+  if (companyId) url += `&companyId=${companyId}`;
+  
+  fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => r.blob()).then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `commandes_${from}_${to}.pdf`; a.click(); URL.revokeObjectURL(url);
+    }).catch(() => toast('Erreur export PDF', 'error'));
 }
 
 async function confirmBatch(batchId) {
@@ -428,8 +484,8 @@ let currentBatchId = null;
 let currentBatchCompany = null;
 function openInvoiceModal(batchId, company) {
   currentBatchId = batchId; currentBatchCompany = company;
-  // Build invoice items from today's orders
-  const date = document.getElementById('ordersDate').value || todayStr();
+  // Récupérer la date du filtre actif (ordersFrom) ou aujourd'hui par défaut
+  const date = document.getElementById('ordersFrom').value || todayStr();
   apiFetch(`/api/restaurant/orders?date=${date}`, {}, token).then(orders => {
     const byMenu = {};
     orders.filter(o => o.company_name === company).forEach(o => {
@@ -596,7 +652,9 @@ async function changeRestPassword() {
 
 async function saveSpecialties() {
   const sp = getSelectedSpecialties('profileSpecialties');
-  await apiFetch('/api/restaurant/profile', { method: 'PUT', body: JSON.stringify({ name: profileData?.name, phone: profileData?.phone, location: profileData?.location, address: profileData?.address, paymentTypes: profileData?.payment_types||[], specialties: sp }) }, token);
+  // Include any custom specialties the user added
+  const allSpecialties = [...sp, ...customSpecialties.filter(s => !sp.includes(s))];
+  await apiFetch('/api/restaurant/profile', { method: 'PUT', body: JSON.stringify({ name: profileData?.name, phone: profileData?.phone, location: profileData?.location, address: profileData?.address, paymentTypes: profileData?.payment_types||[], specialties: allSpecialties }) }, token);
   toast('Spécialités mises à jour', 'success');
 }
 
@@ -772,17 +830,19 @@ async function openChat(companyId, companyName, photo) {
 function renderMsg(m, isSenderRestaurant) {
   const out = m.sender_type === 'restaurant';
   const cls = out ? 'msg-out' : 'msg-in';
-  if (m.message_type === 'voice' && m.audio_data) {
-    return `<div class="msg ${cls}"><div class="msg-voice"><div class="voice-badge">🎙 Message vocal</div><audio controls src="${m.audio_data}"></audio><div class="msg-time">${timeAgo(m.created_at)}</div></div></div>`;
+  const audioSrc = m.audio_url || m.audio_data;
+  const fileSrc = m.file_url || m.file_data;
+  if (m.message_type === 'voice' && audioSrc) {
+    return `<div class="msg ${cls}"><div class="msg-voice"><div class="voice-badge">🎙 Message vocal</div><audio controls src="${audioSrc}"></audio><div class="msg-time">${timeAgo(m.created_at)}</div></div></div>`;
   }
-  if (m.message_type === 'file' && m.file_data) {
+  if (m.message_type === 'file' && fileSrc) {
     let inner = '';
     if (m.file_mime?.startsWith('image/')) {
-      inner = `<img src="${m.file_data}" onclick="window.open('${m.file_data}','_blank')" alt="${m.file_name||'image'}">`;
+      inner = `<img src="${fileSrc}" onclick="window.open('${fileSrc}','_blank')" alt="${m.file_name||'image'}">`;
     } else if (m.file_mime?.startsWith('video/')) {
-      inner = `<video controls><source src="${m.file_data}" type="${m.file_mime}"></video>`;
+      inner = `<video controls><source src="${fileSrc}" type="${m.file_mime}"></video>`;
     } else {
-      inner = `<a class="msg-file-doc" href="${m.file_data}" download="${m.file_name||'document'}">📄<span>${m.file_name||'Document'}</span></a>`;
+      inner = `<a class="msg-file-doc" href="${fileSrc}" download="${m.file_name||'document'}">📄<span>${m.file_name||'Document'}</span></a>`;
     }
     const caption = m.content && !['📷 Photo','🎬 Vidéo'].includes(m.content) && !m.content.startsWith('📄') ? `<div style="font-size:12px;margin-top:3px">${m.content}</div>` : '';
     return `<div class="msg ${cls}"><div class="msg-file">${inner}${caption}<div class="msg-time">${timeAgo(m.created_at)}</div></div></div>`;

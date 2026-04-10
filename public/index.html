@@ -3,46 +3,73 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FoodChooseApp</title>
+  <!-- Polices Google : Playfair Display pour les titres, DM Sans pour le corps de texte -->
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
+    /* Réinitialisation des marges et du modèle de boîte pour tous les éléments */
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    /* Variables CSS globales : palette de couleurs de l'application */
     :root{--orange:#E85A2A;--brown:#2C1810;--cream:#FFF8F3;--muted:#8B6554;--border:#F0E6DE}
+    /* Corps de la page : fond sombre, contenu centré, défilement horizontal désactivé */
     body{font-family:'DM Sans',sans-serif;background:var(--brown);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow-x:hidden;padding:20px}
+    /* Couche de dégradé radial décorative fixe (deux cercles lumineux) */
     .bg{position:fixed;inset:0;z-index:0;background:radial-gradient(circle at 20% 50%,rgba(232,90,42,.18) 0%,transparent 50%),radial-gradient(circle at 80% 20%,rgba(249,199,79,.07) 0%,transparent 40%)}
+    /* Grille de lignes fines pour l'effet de texture de fond */
     .grid{position:fixed;inset:0;z-index:0;background-image:linear-gradient(rgba(255,248,243,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,248,243,.03) 1px,transparent 1px);background-size:40px 40px}
+    /* Conteneur principal du contenu, positionné au-dessus des couches de fond */
     .container{position:relative;z-index:1;width:100%;max-width:900px;animation:fadeUp .7s ease both}
+    /* Animation d'entrée du contenu : glissement vers le haut avec fondu */
     @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    /* Section héros : logo et accroche principale centrés */
     .hero{text-align:center;margin-bottom:48px}
     .hero-logo{font-size:48px;margin-bottom:16px}
     .hero-title{font-family:'Playfair Display',serif;font-size:42px;font-weight:900;color:var(--cream);letter-spacing:-1px;line-height:1.1}
     .hero-title span{color:var(--orange)}
     .hero-sub{color:rgba(255,248,243,.55);font-size:16px;margin-top:12px}
+    /* Grille des 3 portails d'accès (Restaurant, Entreprise, Employé) */
     .portals{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    /* Carte individuelle d'un portail */
     .portal{background:rgba(255,248,243,.06);border:1.5px solid rgba(255,248,243,.1);border-radius:20px;padding:32px 24px;text-align:center;cursor:pointer;transition:all .3s;text-decoration:none;display:flex;flex-direction:column;align-items:center}
+    /* Effet de survol sur un portail : fond plus clair, bordure orange, légère élévation */
     .portal:hover{background:rgba(255,248,243,.1);border-color:var(--orange);transform:translateY(-4px);box-shadow:0 20px 40px rgba(0,0,0,.3)}
     .portal-icon{font-size:40px;margin-bottom:14px;display:block}
     .portal-title{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--cream);margin-bottom:8px}
     .portal-desc{font-size:13px;color:rgba(255,248,243,.5);line-height:1.6;margin-bottom:18px;flex:1}
+    /* Conteneur des boutons d'action du portail (colonne verticale) */
     .portal-actions{display:flex;flex-direction:column;gap:8px;width:100%}
+    /* Style de base commun aux boutons de portail */
     .portal-btn{display:block;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;text-decoration:none;transition:all .2s;text-align:center}
+    /* Bouton plein (orange) : action principale (connexion) */
     .btn-solid{background:var(--orange);color:white}
     .btn-solid:hover{background:#D14D22}
+    /* Bouton fantôme (transparent) : action secondaire (inscription) */
     .btn-ghost{background:rgba(255,248,243,.08);color:rgba(255,248,243,.7);border:1px solid rgba(255,248,243,.15)}
     .btn-ghost:hover{background:rgba(255,248,243,.15);color:var(--cream)}
+    /* Pied de page centré avec texte très atténué */
     .footer{margin-top:40px;text-align:center;color:rgba(255,248,243,.25);font-size:12px}
+    /* Responsive : 1 colonne sur mobile, tailles de texte réduites */
     @media(max-width:700px){.portals{grid-template-columns:1fr}.hero-title{font-size:28px}.hero-sub{font-size:14px}.portal{padding:22px 16px}.hero{margin-bottom:28px}.hero-logo{font-size:38px}.footer{margin-top:28px}}
     @media(max-width:400px){.hero-title{font-size:24px}.portal-title{font-size:17px}}
   </style>
 </head>
 <body>
+  <!-- Couches décoratives d'arrière-plan (dégradé + grille) -->
   <div class="bg"></div><div class="grid"></div>
+
+  <!-- Contenu principal de la page d'accueil -->
   <div class="container">
+
+    <!-- Section héros : logo et phrase d'accroche de l'application -->
     <div class="hero">
       <div class="hero-logo">🍽</div>
       <h1 class="hero-title">Food<span>Choose</span>App</h1>
       <p class="hero-sub">La plateforme intelligente de gestion des repas d'entreprise</p>
     </div>
+
+    <!-- Grille des 3 portails d'accès selon le rôle de l'utilisateur -->
     <div class="portals">
+
+      <!-- Portail Restaurant : accès aux fonctions de gestion des menus et commandes -->
       <div class="portal">
         <span class="portal-icon">🏪</span>
         <div class="portal-title">Restaurant</div>
@@ -52,6 +79,8 @@
           <a href="/restaurant/register" class="portal-btn btn-ghost">Créer un compte</a>
         </div>
       </div>
+
+      <!-- Portail Entreprise / Admin : gestion des affiliations et commandes des employés -->
       <div class="portal">
         <span class="portal-icon">🏢</span>
         <div class="portal-title">Entreprise / Admin</div>
@@ -61,6 +90,8 @@
           <a href="/company/register" class="portal-btn btn-ghost">Créer un compte</a>
         </div>
       </div>
+
+      <!-- Portail Employé : choix du repas de midi parmi les restaurants affiliés -->
       <div class="portal">
         <span class="portal-icon">👤</span>
         <div class="portal-title">Employé</div>
@@ -69,16 +100,22 @@
           <a href="/employee" class="portal-btn btn-solid">Se connecter</a>
         </div>
       </div>
+
     </div>
+
+    <!-- Pied de page avec mention de copyright -->
     <div class="footer">© 2026 FoodChooseApp — Tous droits réservés</div>
   </div>
+
   <script>
-    // Auto-redirect if already logged in
+    // Redirection automatique si l'utilisateur est déjà connecté.
+    // Lit le rôle stocké dans localStorage et redirige vers le tableau de bord approprié.
+    // Cela évite d'afficher la page d'accueil à un utilisateur déjà authentifié.
     const role = localStorage.getItem('fc_role');
-    if (role === 'restaurant') window.location.href = '/restaurant/dashboard';
-    else if (role === 'admin') window.location.href = '/company/admin';
-    else if (role === 'company') window.location.href = '/company/admin';
-    else if (role === 'employee') window.location.href = '/employee';
+    if (role === 'restaurant') window.location.href = '/restaurant/dashboard';  // Tableau de bord restaurant
+    else if (role === 'admin') window.location.href = '/company/admin';          // Tableau de bord admin
+    else if (role === 'company') window.location.href = '/company/admin';        // Tableau de bord entreprise
+    else if (role === 'employee') window.location.href = '/employee';            // Interface employé
   </script>
 </body>
 </html>
