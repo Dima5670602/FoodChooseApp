@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>FoodChooseApp — Connexion Entreprise / Admin</title>
+  <title>FoodChooseApp — Connexion Entreprise</title>
   <!-- Polices Google : Playfair Display pour les titres, DM Sans pour le corps de texte -->
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <!-- Feuille de style principale de l'application -->
@@ -41,7 +41,7 @@
     #errMsg{background:#FEE2E2;color:#991B1B;border-radius:10px;padding:12px 14px;font-size:13px;margin-top:10px;display:none;border:1px solid #FCA5A5}
     /* Classe ajoutée dynamiquement pour rendre le message d'erreur visible */
     #errMsg.show{display:block}
-    /* Encadré d'indice pour la connexion administrateur */
+    /* Encadré d'indice informatif (connexion entreprise) */
     .admin-hint{background:#FFF0EA;border:1px solid rgba(232,90,42,.2);border-radius:10px;padding:11px 14px;font-size:12px;color:var(--brown);margin-bottom:16px}
     .admin-hint strong{color:var(--orange)}
   </style>
@@ -58,11 +58,10 @@
   <div class="auth-logo">
     <span class="icon">🏢</span>
     <h1>Food<span>Choose</span>App</h1>
-    <p>Espace Entreprise & Administration</p>
+    <p>Espace Entreprise</p>
   </div>
 
-  <!-- Role selector -->
-  <!-- Onglets de sélection du rôle (Entreprise) -->
+  <!-- Onglet de connexion entreprise -->
   <div class="role-tabs">
     <div class="role-tab active" id="tab-company" onclick="switchTab('company')">
       <span class="tab-icon">🏢</span>Entreprise
@@ -144,21 +143,19 @@
 <!-- Utilitaires partagés : apiFetch, toast, initPasswordToggles, etc. -->
 <script src="/assets/js/utils.js"></script>
 <script>
-// Redirection automatique si l'utilisateur est déjà connecté en tant qu'admin
-if (localStorage.getItem('fc_role') === 'admin') window.location.href = '/company/admin';
 // Initialise les boutons bascule afficher/masquer sur tous les champs mot de passe de la page
 initPasswordToggles();
 
 // ── Mot de passe oublié ───────────────────────────────
 
-// Variable qui mémorise le type d'utilisateur en cours de réinitialisation ('company' ou 'admin')
+// Type d'utilisateur en cours de réinitialisation (toujours 'company' dans cette page)
 let _fpType = 'company';
 
 /**
  * Ouvre la modale de réinitialisation du mot de passe.
  * Remet tous les champs à zéro, masque les étapes 2 et 3,
  * affiche l'étape 1, puis rend la modale visible.
- * @param {string} type - Type d'utilisateur ('company' ou 'admin')
+ * @param {string} type - Type d'utilisateur ('company')
  */
 function openForgotModal(type) {
   _fpType = type;
@@ -248,8 +245,7 @@ async function fpResetPassword() {
 }
 
 /**
- * Bascule entre les onglets de rôle (Entreprise / Admin).
- * Active visuellement l'onglet sélectionné et affiche le formulaire correspondant.
+ * Active l'onglet de connexion entreprise et affiche le formulaire correspondant.
  * Masque également le message d'erreur précédent.
  * @param {string} tab - Identifiant de l'onglet à activer ('company')
  */
@@ -264,7 +260,7 @@ function switchTab(tab) {
  * Effectue la connexion du compte entreprise.
  * Lit l'email et le mot de passe, appelle l'API /api/auth/company/login,
  * puis stocke le token JWT et les infos de session dans localStorage
- * avant de rediriger vers le tableau de bord admin.
+ * avant de rediriger vers le tableau de bord entreprise.
  */
 async function loginCompany() {
   // Récupération des valeurs saisies dans le formulaire
@@ -289,7 +285,7 @@ async function loginCompany() {
     localStorage.setItem('fc_name', data.name);
     // Stocker l'identifiant de l'entreprise pour les requêtes API
     localStorage.setItem('fc_id', data.id);
-    // Redirection vers le tableau de bord administrateur de l'entreprise
+    // Redirection vers le tableau de bord de l'entreprise
     window.location.href = '/company/admin';
   } catch(e2) {
     // Afficher le message d'erreur retourné par l'API

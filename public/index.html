@@ -80,10 +80,10 @@
         </div>
       </div>
 
-      <!-- Portail Entreprise / Admin : gestion des affiliations et commandes des employés -->
+      <!-- Portail Entreprise : gestion des affiliations et commandes des employés -->
       <div class="portal">
         <span class="portal-icon">🏢</span>
-        <div class="portal-title">Entreprise / Admin</div>
+        <div class="portal-title">Entreprise</div>
         <p class="portal-desc">Affiliez votre entreprise à des restaurants, gérez les commandes de vos employés.</p>
         <div class="portal-actions">
           <a href="/company/login" class="portal-btn btn-solid">Se connecter</a>
@@ -113,7 +113,6 @@
     // Cela évite d'afficher la page d'accueil à un utilisateur déjà authentifié.
     const role = localStorage.getItem('fc_role');
     if (role === 'restaurant') window.location.href = '/restaurant/dashboard';  // Tableau de bord restaurant
-    else if (role === 'admin') window.location.href = '/company/admin';          // Tableau de bord admin
     else if (role === 'company') window.location.href = '/company/admin';        // Tableau de bord entreprise
     else if (role === 'employee') window.location.href = '/employee';            // Interface employé
   </script>

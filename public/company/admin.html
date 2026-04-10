@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>FoodChooseApp — Espace Admin</title>
+  <title>FoodChooseApp — Espace Entreprise</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/css/main.css">
 </head>
@@ -16,7 +16,7 @@
   <div class="sidebar-logo">
     <span class="logo-icon">🏢</span>
     <div class="logo-name">Food<span>Choose</span></div>
-    <span class="logo-badge" id="roleLabel">Admin</span>
+    <span class="logo-badge" id="roleLabel">Entreprise</span>
   </div>
   <nav class="sidebar-nav">
     <div class="nav-section">Tableau de bord</div>
@@ -1057,7 +1057,7 @@ loadAllRestaurants();
 // ── Settings ──────────────────────────────────────────
 async function loadSettings() {
   initPasswordToggles();
-  // Libellé du champ mot de passe (l'entreprise est toujours son propre admin)
+  // Libellé du champ mot de passe
   const label = document.getElementById('coPwLabel');
   if (label) label.textContent = 'Mot de passe actuel';
   // Load company logo if available
