@@ -91,13 +91,13 @@
     <div class="nav-item" data-page="history"><span class="icon">📋</span><span>Mon historique</span></div>
     <div class="nav-item" data-page="ratings"><span class="icon">⭐</span><span>Mes notes</span></div>
     <div class="nav-item" data-page="profile"><span class="icon">⚙️</span><span>Mon profil</span></div>
+    <button class="nav-item-logout" onclick="logoutEmp()"><span class="icon">🚪</span><span>Déconnexion</span></button>
   </nav>
   <div class="sidebar-footer">
     <div class="user-card">
       <div class="user-avatar" id="sidebarAvatar">👤</div>
       <div><div class="user-name" id="sidebarName">—</div><div class="user-role" id="sidebarId">—</div></div>
     </div>
-    <button class="btn-logout" onclick="logoutEmp()">🚪 Déconnexion</button>
   </div>
 </aside>
 
@@ -113,7 +113,6 @@
         <button class="notif-btn" onclick="toggleNotifDropdown()">🔔<span class="notif-count" id="notifCount" style="display:none">0</span></button>
         <div class="notif-dropdown" id="notifDropdown"></div>
       </div>
-      <button class="btn-topbar-logout" onclick="logoutEmp()" title="Déconnexion">🚪 Déconnexion</button>
     </div>
   </div>
 

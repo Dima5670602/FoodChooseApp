@@ -28,13 +28,13 @@
     <div class="nav-item" data-page="ratings"><span class="icon">⭐</span><span>Avis clients</span></div>
     <div class="nav-section">Compte</div>
     <div class="nav-item" data-page="profile"><span class="icon">⚙️</span><span>Mon profil</span></div>
+    <button class="nav-item-logout" onclick="logout()"><span class="icon">🚪</span><span>Déconnexion</span></button>
   </nav>
   <div class="sidebar-footer">
     <div class="user-card">
       <div class="user-avatar" id="sidebarAvatar">🏪</div>
       <div><div class="user-name" id="sidebarName">—</div><div class="user-role">Restaurant</div></div>
     </div>
-    <button class="btn-logout" onclick="logout()">🚪 Déconnexion</button>
   </div>
 </aside>
 
@@ -49,7 +49,6 @@
         <button class="notif-btn" onclick="toggleNotifDropdown()">🔔<span class="notif-count" id="notifCount" style="display:none">0</span></button>
         <div class="notif-dropdown" id="notifDropdown"></div>
       </div>
-      <button class="btn-topbar-logout" onclick="logout()" title="Déconnexion">🚪 Déconnexion</button>
     </div>
   </div>
   <div class="content">
@@ -648,8 +647,53 @@ async function loadConversations() {
   } catch(e) {}
 }
 
+// ── Voice recording (restaurant) ──────────────────────
+let restVoiceRecorder = null, restVoiceChunks = [], restVoiceTimer = null, restIsRecording = false;
+
+function toggleVoiceRecord(companyId) {
+  if (restIsRecording) {
+    if (restVoiceRecorder && restVoiceRecorder.state === 'recording') restVoiceRecorder.stop();
+    clearInterval(restVoiceTimer); restIsRecording = false;
+    document.getElementById('recordBtn')?.classList.remove('recording');
+    document.getElementById('recordTimer').textContent = '';
+  } else {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      restVoiceRecorder = new MediaRecorder(stream, { mimeType });
+      restVoiceChunks = [];
+      restVoiceRecorder.ondataavailable = e => { if (e.data.size > 0) restVoiceChunks.push(e.data); };
+      restVoiceRecorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(restVoiceChunks, { type: mimeType });
+        const reader = new FileReader();
+        reader.onloadend = () => sendVoiceMsg(companyId, reader.result);
+        reader.readAsDataURL(blob);
+      };
+      restVoiceRecorder.start();
+      restIsRecording = true;
+      document.getElementById('recordBtn')?.classList.add('recording');
+      let secs = 0;
+      restVoiceTimer = setInterval(() => {
+        secs++;
+        const t = document.getElementById('recordTimer');
+        if (t) t.textContent = `${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`;
+        if (secs >= 120) toggleVoiceRecord(companyId);
+      }, 1000);
+    }).catch(() => toast('Microphone inaccessible', 'error'));
+  }
+}
+
+async function sendVoiceMsg(companyId, audioData) {
+  const restId = parseInt(localStorage.getItem('fc_id'));
+  try {
+    await apiFetch('/api/messages', { method: 'POST', body: { companyId, restaurantId: restId, content: '🎙 Message vocal', messageType: 'voice', audioData } }, token);
+    loadMessages(companyId);
+  } catch(e) { toast('Erreur envoi vocal', 'error'); }
+}
+
 async function openChat(companyId, companyName, photo) {
   currentChatCompanyId = companyId;
+  restIsRecording = false;
   await apiFetch('/api/messages/read', { method: 'PUT', body: JSON.stringify({ companyId, restaurantId: parseInt(localStorage.getItem('fc_id')) }) }, token);
   const main = document.getElementById('chatMain');
   main.innerHTML = `
@@ -660,11 +704,22 @@ async function openChat(companyId, companyName, photo) {
     <div class="chat-messages" id="chatMessages"></div>
     <div class="chat-input-area">
       <input class="chat-input" id="chatInput" placeholder="Votre message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg(${companyId})}">
+      <span class="record-timer" id="recordTimer"></span>
+      <button class="record-btn" id="recordBtn" onclick="toggleVoiceRecord(${companyId})" title="Message vocal">🎙</button>
       <button class="btn btn-primary btn-sm" onclick="sendMsg(${companyId})">Envoyer</button>
     </div>
   `;
   loadMessages(companyId);
   loadConversations();
+}
+
+function renderMsg(m, isSenderRestaurant) {
+  const out = isSenderRestaurant ? m.sender_type === 'restaurant' : m.sender_type === 'company';
+  const cls = out ? 'msg-out' : 'msg-in';
+  if (m.message_type === 'voice' && m.audio_data) {
+    return `<div class="msg ${cls}"><div class="msg-voice"><div class="voice-badge">🎙 Message vocal</div><audio controls src="${m.audio_data}"></audio><div class="msg-time">${timeAgo(m.created_at)}</div></div></div>`;
+  }
+  return `<div class="msg ${cls}">${m.content}<div class="msg-time">${timeAgo(m.created_at)}</div></div>`;
 }
 
 async function loadMessages(companyId) {
@@ -673,12 +728,7 @@ async function loadMessages(companyId) {
     const msgs = await apiFetch(`/api/messages?companyId=${companyId}&restaurantId=${restId}`, {}, token);
     const el = document.getElementById('chatMessages');
     if (!el) return;
-    el.innerHTML = msgs.map(m => `
-      <div class="msg ${m.sender_type==='restaurant'?'msg-out':'msg-in'}">
-        ${m.content}
-        <div class="msg-time">${timeAgo(m.created_at)}</div>
-      </div>
-    `).join('');
+    el.innerHTML = msgs.map(m => renderMsg(m, true)).join('');
     el.scrollTop = el.scrollHeight;
   } catch(e) {}
 }

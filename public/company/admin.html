@@ -35,13 +35,13 @@
     <div class="nav-item" data-page="history"><span class="icon">📋</span><span>Historique</span></div>
     <div class="nav-section">Compte</div>
     <div class="nav-item" data-page="settings"><span class="icon">⚙️</span><span>Paramètres</span></div>
+    <button class="nav-item-logout" onclick="logout()"><span class="icon">🚪</span><span>Déconnexion</span></button>
   </nav>
   <div class="sidebar-footer">
     <div class="user-card">
       <div class="user-avatar" id="sidebarAvatar">👔</div>
       <div><div class="user-name" id="sidebarName">—</div><div class="user-role" id="sidebarRole">Chargé de commande</div></div>
     </div>
-    <button class="btn-logout" onclick="logout()">🚪 Déconnexion</button>
   </div>
 </aside>
 
@@ -57,7 +57,6 @@
         <button class="notif-btn" onclick="toggleNotifDropdown()">🔔<span class="notif-count" id="notifCount" style="display:none">0</span></button>
         <div class="notif-dropdown" id="notifDropdown"></div>
       </div>
-      <button class="btn-topbar-logout" onclick="logout()" title="Déconnexion">🚪 Déconnexion</button>
     </div>
   </div>
   <div class="content">
@@ -804,8 +803,61 @@ async function loadAdminConversations() {
   } catch(e) {}
 }
 
+// ── Voice recording (admin) ───────────────────────────
+let adminVoiceRecorder = null, adminVoiceChunks = [], adminVoiceTimer = null, adminIsRecording = false;
+
+function toggleAdminVoiceRecord(restId) {
+  if (adminIsRecording) {
+    if (adminVoiceRecorder && adminVoiceRecorder.state === 'recording') adminVoiceRecorder.stop();
+    clearInterval(adminVoiceTimer); adminIsRecording = false;
+    document.getElementById('adminRecordBtn')?.classList.remove('recording');
+    document.getElementById('adminRecordTimer').textContent = '';
+  } else {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      adminVoiceRecorder = new MediaRecorder(stream, { mimeType });
+      adminVoiceChunks = [];
+      adminVoiceRecorder.ondataavailable = e => { if (e.data.size > 0) adminVoiceChunks.push(e.data); };
+      adminVoiceRecorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(adminVoiceChunks, { type: mimeType });
+        const reader = new FileReader();
+        reader.onloadend = () => sendAdminVoiceMsg(restId, reader.result);
+        reader.readAsDataURL(blob);
+      };
+      adminVoiceRecorder.start();
+      adminIsRecording = true;
+      document.getElementById('adminRecordBtn')?.classList.add('recording');
+      let secs = 0;
+      adminVoiceTimer = setInterval(() => {
+        secs++;
+        const t = document.getElementById('adminRecordTimer');
+        if (t) t.textContent = `${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`;
+        if (secs >= 120) toggleAdminVoiceRecord(restId);
+      }, 1000);
+    }).catch(() => toast('Microphone inaccessible', 'error'));
+  }
+}
+
+async function sendAdminVoiceMsg(restId, audioData) {
+  const coId = parseInt(localStorage.getItem('fc_id'));
+  try {
+    await apiFetch('/api/messages', { method: 'POST', body: { companyId: coId, restaurantId: restId, content: '🎙 Message vocal', messageType: 'voice', audioData } }, token);
+    loadAdminMessages(restId);
+  } catch(e) { toast('Erreur envoi vocal', 'error'); }
+}
+
+function renderAdminMsg(m) {
+  const cls = m.sender_type === 'company' ? 'msg-out' : 'msg-in';
+  if (m.message_type === 'voice' && m.audio_data) {
+    return `<div class="msg ${cls}"><div class="msg-voice"><div class="voice-badge">🎙 Message vocal</div><audio controls src="${m.audio_data}"></audio><div class="msg-time">${timeAgo(m.created_at)}</div></div></div>`;
+  }
+  return `<div class="msg ${cls}">${m.content}<div class="msg-time">${timeAgo(m.created_at)}</div></div>`;
+}
+
 async function openAdminChat(restId, restName, photo) {
   currentChatRestId = restId;
+  adminIsRecording = false;
   const coId = parseInt(localStorage.getItem('fc_id'));
   await apiFetch('/api/messages/read', { method: 'PUT', body: JSON.stringify({ companyId: coId, restaurantId: restId }) }, token).catch(()=>{});
   const main = document.getElementById('adminChatMain');
@@ -817,6 +869,8 @@ async function openAdminChat(restId, restName, photo) {
     <div class="chat-messages" id="adminChatMessages"></div>
     <div class="chat-input-area">
       <input class="chat-input" id="adminChatInput" placeholder="Votre message..." onkeydown="if(event.key==='Enter'){event.preventDefault();sendAdminMsg(${restId})}">
+      <span class="record-timer" id="adminRecordTimer"></span>
+      <button class="record-btn" id="adminRecordBtn" onclick="toggleAdminVoiceRecord(${restId})" title="Message vocal">🎙</button>
       <button class="btn btn-primary btn-sm" onclick="sendAdminMsg(${restId})">Envoyer</button>
     </div>
   `;
@@ -830,12 +884,7 @@ async function loadAdminMessages(restId) {
     const msgs = await apiFetch(`/api/messages?companyId=${coId}&restaurantId=${restId}`, {}, token);
     const el = document.getElementById('adminChatMessages');
     if (!el) return;
-    el.innerHTML = msgs.map(m=>`
-      <div class="msg ${m.sender_type==='company'?'msg-out':'msg-in'}">
-        ${m.content}
-        <div class="msg-time">${timeAgo(m.created_at)}</div>
-      </div>
-    `).join('');
+    el.innerHTML = msgs.map(m => renderAdminMsg(m)).join('');
     el.scrollTop = el.scrollHeight;
   } catch(e) {}
 }

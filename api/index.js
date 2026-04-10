@@ -92,9 +92,12 @@ async function initDB() {
       id SERIAL PRIMARY KEY, sender_type VARCHAR(20) NOT NULL, sender_id INTEGER NOT NULL,
       company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
       restaurant_id INTEGER REFERENCES restaurants(id) ON DELETE CASCADE,
-      content TEXT NOT NULL, read_by_company BOOLEAN DEFAULT FALSE,
+      content TEXT NOT NULL, message_type VARCHAR(10) DEFAULT 'text',
+      audio_data TEXT, read_by_company BOOLEAN DEFAULT FALSE,
       read_by_restaurant BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT NOW()
     );
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_type VARCHAR(10) DEFAULT 'text';
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS audio_data TEXT;
     CREATE TABLE IF NOT EXISTS notifications (
       id SERIAL PRIMARY KEY, target_type VARCHAR(20) NOT NULL, target_id INTEGER NOT NULL,
       title VARCHAR(255), message TEXT, type VARCHAR(50), read BOOLEAN DEFAULT FALSE,
@@ -541,24 +544,25 @@ app.get('/api/messages', async (req, res) => {
 
 app.post('/api/messages', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
-  const { companyId, restaurantId, content } = req.body;
+  const { companyId, restaurantId, content, messageType, audioData } = req.body;
   try {
     const d = jwt.verify(token, JWT_SECRET);
     const senderType = d.role === 'restaurant' ? 'restaurant' : 'company';
     const senderId = d.id;
+    const msgType = messageType === 'voice' ? 'voice' : 'text';
     const r = await pool.query(
-      'INSERT INTO messages (sender_type,sender_id,company_id,restaurant_id,content) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-      [senderType, senderId, companyId, restaurantId, content]
+      'INSERT INTO messages (sender_type,sender_id,company_id,restaurant_id,content,message_type,audio_data) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [senderType, senderId, companyId, restaurantId, content || (msgType === 'voice' ? '🎙 Message vocal' : ''), msgType, audioData || null]
     );
-    // notify recipient
+    const preview = msgType === 'voice' ? '🎙 Message vocal' : content.substring(0, 80);
     if (senderType === 'company') {
-      await createNotification('restaurant', restaurantId, '💬 Nouveau message', content.substring(0,80), 'message', { companyId, restaurantId });
+      await createNotification('restaurant', restaurantId, '💬 Nouveau message', preview, 'message', { companyId, restaurantId });
       const rest = await pool.query('SELECT email,name FROM restaurants WHERE id=$1', [restaurantId]);
-      if (rest.rows.length) sendMail(rest.rows[0].email, '💬 Nouveau message FoodChooseApp', welcomeEmailHtml(rest.rows[0].name, `<p style="color:#4A3728">Vous avez reçu un message : <em>${content.substring(0,100)}</em></p>`)).catch(err => console.error('Email message:', err));
+      if (rest.rows.length) sendMail(rest.rows[0].email, '💬 Nouveau message FoodChooseApp', welcomeEmailHtml(rest.rows[0].name, `<p style="color:#4A3728">Vous avez reçu un message : <em>${preview}</em></p>`)).catch(err => console.error('Email message:', err));
     } else {
-      await createNotification('company', companyId, '💬 Nouveau message', content.substring(0,80), 'message', { companyId, restaurantId });
+      await createNotification('company', companyId, '💬 Nouveau message', preview, 'message', { companyId, restaurantId });
       const co = await pool.query('SELECT email,name FROM companies WHERE id=$1', [companyId]);
-      if (co.rows.length) sendMail(co.rows[0].email, '💬 Nouveau message FoodChooseApp', welcomeEmailHtml(co.rows[0].name, `<p style="color:#4A3728">Vous avez reçu un message : <em>${content.substring(0,100)}</em></p>`)).catch(err => console.error('Email message:', err));
+      if (co.rows.length) sendMail(co.rows[0].email, '💬 Nouveau message FoodChooseApp', welcomeEmailHtml(co.rows[0].name, `<p style="color:#4A3728">Vous avez reçu un message : <em>${preview}</em></p>`)).catch(err => console.error('Email message:', err));
     }
     res.status(201).json(r.rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
