@@ -647,6 +647,59 @@ async function loadConversations() {
   } catch(e) {}
 }
 
+// ── File upload (restaurant) ──────────────────────────
+let pendingRestFile = null;
+
+async function openRestFileUpload() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*,application/pdf,video/mp4,video/webm,video/quicktime';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const mime = file.type;
+    let data, fileType;
+    if (mime.startsWith('image/')) {
+      fileType = 'image';
+      data = await compressImage(file);
+    } else if (mime === 'application/pdf') {
+      fileType = 'pdf';
+      if (file.size > 3 * 1024 * 1024) { toast('PDF trop volumineux (max 3 Mo)', 'error'); return; }
+      data = await readFileAsBase64(file);
+    } else if (mime.startsWith('video/')) {
+      fileType = 'video';
+      if (file.size > 3 * 1024 * 1024) { toast('Vidéo trop volumineuse (max 3 Mo)', 'error'); return; }
+      const dur = await checkVideoDuration(file);
+      if (dur > 32) { toast('Vidéo trop longue (max 30s)', 'error'); return; }
+      data = await readFileAsBase64(file);
+    } else { toast('Type non supporté (image, PDF ou vidéo)', 'error'); return; }
+    pendingRestFile = { data, name: file.name, mime, type: fileType };
+    showRestFilePreview();
+  };
+  input.click();
+}
+
+function showRestFilePreview() {
+  const bar = document.getElementById('restFilePreviewBar');
+  if (!bar || !pendingRestFile) return;
+  bar.style.display = 'flex';
+  let inner = '';
+  if (pendingRestFile.type === 'image') {
+    inner = `<div class="file-thumb"><img src="${pendingRestFile.data}"><button class="file-thumb-del" onclick="clearRestFile()">✕</button></div>`;
+  } else if (pendingRestFile.type === 'video') {
+    inner = `<div class="file-thumb">🎬<span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pendingRestFile.name}</span><button class="file-thumb-del" onclick="clearRestFile()">✕</button></div>`;
+  } else {
+    inner = `<div class="file-thumb">📄<span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pendingRestFile.name}</span><button class="file-thumb-del" onclick="clearRestFile()">✕</button></div>`;
+  }
+  bar.innerHTML = inner;
+}
+
+function clearRestFile() {
+  pendingRestFile = null;
+  const bar = document.getElementById('restFilePreviewBar');
+  if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
+}
+
 // ── Voice recording (restaurant) ──────────────────────
 let restVoiceRecorder = null, restVoiceChunks = [], restVoiceTimer = null, restIsRecording = false;
 
@@ -694,6 +747,7 @@ async function sendVoiceMsg(companyId, audioData) {
 async function openChat(companyId, companyName, photo) {
   currentChatCompanyId = companyId;
   restIsRecording = false;
+  clearRestFile();
   await apiFetch('/api/messages/read', { method: 'PUT', body: JSON.stringify({ companyId, restaurantId: parseInt(localStorage.getItem('fc_id')) }) }, token);
   const main = document.getElementById('chatMain');
   main.innerHTML = `
@@ -702,7 +756,9 @@ async function openChat(companyId, companyName, photo) {
       ${companyName}
     </div>
     <div class="chat-messages" id="chatMessages"></div>
+    <div class="file-preview-bar" id="restFilePreviewBar" style="display:none"></div>
     <div class="chat-input-area">
+      <button class="attach-btn" onclick="openRestFileUpload()" title="Joindre un fichier">📎</button>
       <input class="chat-input" id="chatInput" placeholder="Votre message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg(${companyId})}">
       <span class="record-timer" id="recordTimer"></span>
       <button class="record-btn" id="recordBtn" onclick="toggleVoiceRecord(${companyId})" title="Message vocal">🎙</button>
@@ -714,10 +770,22 @@ async function openChat(companyId, companyName, photo) {
 }
 
 function renderMsg(m, isSenderRestaurant) {
-  const out = isSenderRestaurant ? m.sender_type === 'restaurant' : m.sender_type === 'company';
+  const out = m.sender_type === 'restaurant';
   const cls = out ? 'msg-out' : 'msg-in';
   if (m.message_type === 'voice' && m.audio_data) {
     return `<div class="msg ${cls}"><div class="msg-voice"><div class="voice-badge">🎙 Message vocal</div><audio controls src="${m.audio_data}"></audio><div class="msg-time">${timeAgo(m.created_at)}</div></div></div>`;
+  }
+  if (m.message_type === 'file' && m.file_data) {
+    let inner = '';
+    if (m.file_mime?.startsWith('image/')) {
+      inner = `<img src="${m.file_data}" onclick="window.open('${m.file_data}','_blank')" alt="${m.file_name||'image'}">`;
+    } else if (m.file_mime?.startsWith('video/')) {
+      inner = `<video controls><source src="${m.file_data}" type="${m.file_mime}"></video>`;
+    } else {
+      inner = `<a class="msg-file-doc" href="${m.file_data}" download="${m.file_name||'document'}">📄<span>${m.file_name||'Document'}</span></a>`;
+    }
+    const caption = m.content && !['📷 Photo','🎬 Vidéo'].includes(m.content) && !m.content.startsWith('📄') ? `<div style="font-size:12px;margin-top:3px">${m.content}</div>` : '';
+    return `<div class="msg ${cls}"><div class="msg-file">${inner}${caption}<div class="msg-time">${timeAgo(m.created_at)}</div></div></div>`;
   }
   return `<div class="msg ${cls}">${m.content}<div class="msg-time">${timeAgo(m.created_at)}</div></div>`;
 }
@@ -735,12 +803,18 @@ async function loadMessages(companyId) {
 
 async function sendMsg(companyId) {
   const input = document.getElementById('chatInput');
-  const content = input?.value.trim();
-  if (!content) return;
+  const text = input?.value.trim();
   const restId = parseInt(localStorage.getItem('fc_id'));
   try {
-    await apiFetch('/api/messages', { method: 'POST', body: JSON.stringify({ companyId, restaurantId: restId, content }) }, token);
-    input.value = '';
+    if (pendingRestFile) {
+      const caption = text || (pendingRestFile.type === 'image' ? '📷 Photo' : pendingRestFile.type === 'video' ? '🎬 Vidéo' : `📄 ${pendingRestFile.name}`);
+      await apiFetch('/api/messages', { method: 'POST', body: { companyId, restaurantId: restId, content: caption, messageType: 'file', fileData: pendingRestFile.data, fileName: pendingRestFile.name, fileMime: pendingRestFile.mime } }, token);
+      if (input) input.value = '';
+      clearRestFile();
+    } else if (text) {
+      await apiFetch('/api/messages', { method: 'POST', body: JSON.stringify({ companyId, restaurantId: restId, content: text }) }, token);
+      input.value = '';
+    } else { return; }
     loadMessages(companyId);
   } catch(e) { toast('Erreur envoi', 'error'); }
 }

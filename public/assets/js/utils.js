@@ -167,6 +167,37 @@ function readFileAsBase64(file) {
   });
 }
 
+// ─── Image compression (Canvas) ───────────────────────
+function compressImage(file, maxPx = 1024, quality = 0.82) {
+  return new Promise(resolve => {
+    const canvas = document.createElement('canvas');
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w > maxPx || h > maxPx) {
+        if (w >= h) { h = Math.round(h * maxPx / w); w = maxPx; }
+        else { w = Math.round(w * maxPx / h); h = maxPx; }
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => readFileAsBase64(file).then(resolve);
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// ─── Video duration check ─────────────────────────────
+function checkVideoDuration(file) {
+  return new Promise(resolve => {
+    const vid = document.createElement('video');
+    vid.preload = 'metadata';
+    vid.onloadedmetadata = () => { URL.revokeObjectURL(vid.src); resolve(vid.duration); };
+    vid.onerror = () => resolve(0);
+    vid.src = URL.createObjectURL(file);
+  });
+}
+
 // ─── Scroll to top ────────────────────────────────────
 (function() {
   const btn = document.createElement('button');

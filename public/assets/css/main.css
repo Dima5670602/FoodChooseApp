@@ -175,15 +175,26 @@ tr:hover td { background: rgba(232,90,42,.02); }
 .chat-input-area { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; }
 .chat-input { flex: 1; padding: 9px 14px; border: 1.5px solid var(--border); border-radius: 99px; font-family: 'DM Sans', sans-serif; font-size: 13.5px; outline: none; }
 .chat-input:focus { border-color: var(--orange); }
-.record-btn { width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--border); background: none; cursor: pointer; font-size: 17px; display: flex; align-items: center; justify-content: center; transition: all .2s; flex-shrink: 0; color: var(--muted); }
+.record-btn { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--border); background: none; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all .2s; flex-shrink: 0; color: var(--muted); }
 .record-btn:hover { border-color: var(--orange); color: var(--orange); background: rgba(232,90,42,.08); }
 .record-btn.recording { background: #DC2626; border-color: #DC2626; color: white; animation: recPulse 1s ease-in-out infinite; }
 @keyframes recPulse { 0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.4)} 50%{box-shadow:0 0 0 8px rgba(220,38,38,0)} }
 .record-timer { font-size: 12px; color: #DC2626; font-weight: 700; min-width: 36px; font-variant-numeric: tabular-nums; }
+.attach-btn { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--border); background: none; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all .2s; flex-shrink: 0; color: var(--muted); }
+.attach-btn:hover { border-color: var(--orange); color: var(--orange); background: rgba(232,90,42,.08); }
+.file-preview-bar { padding: 8px 16px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.file-thumb { position: relative; display: inline-flex; align-items: center; gap: 6px; background: #FFF0EA; border: 1.5px solid var(--orange); border-radius: 8px; padding: 5px 10px; font-size: 12px; max-width: 220px; }
+.file-thumb img { height: 48px; width: 48px; object-fit: cover; border-radius: 5px; }
+.file-thumb-del { position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; border-radius: 50%; background: #DC2626; color: white; border: none; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 700; }
 .msg-voice { display: flex; flex-direction: column; gap: 4px; }
 .voice-badge { font-size: 11px; opacity: .75; }
 .msg-voice audio { max-width: 220px; height: 34px; display: block; border-radius: 6px; }
 .msg-out .msg-voice audio { filter: brightness(1.1); }
+.msg-file { display: flex; flex-direction: column; gap: 5px; }
+.msg-file img { max-width: 220px; max-height: 200px; border-radius: 9px; display: block; cursor: pointer; object-fit: cover; }
+.msg-file video { max-width: 220px; border-radius: 9px; display: block; background: #000; }
+.msg-file-doc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(255,255,255,.25); border-radius: 9px; color: inherit; text-decoration: none; font-size: 13px; }
+.msg-file-doc span { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ─── Notifications Bell ─────────────────────────────── */
 .notif-btn { position: relative; background: none; border: none; cursor: pointer; padding: 6px; border-radius: 9px; font-size: 20px; color: var(--muted); transition: color .2s; }

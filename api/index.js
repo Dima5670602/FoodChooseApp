@@ -16,7 +16,8 @@ const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASSWORD || '@admin123';
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
 
 // ─── DB ──────────────────────────────────────────────────────────
@@ -98,6 +99,9 @@ async function initDB() {
     );
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_type VARCHAR(10) DEFAULT 'text';
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS audio_data TEXT;
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_data TEXT;
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name VARCHAR(255);
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_mime VARCHAR(100);
     CREATE TABLE IF NOT EXISTS notifications (
       id SERIAL PRIMARY KEY, target_type VARCHAR(20) NOT NULL, target_id INTEGER NOT NULL,
       title VARCHAR(255), message TEXT, type VARCHAR(50), read BOOLEAN DEFAULT FALSE,
@@ -544,17 +548,20 @@ app.get('/api/messages', async (req, res) => {
 
 app.post('/api/messages', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
-  const { companyId, restaurantId, content, messageType, audioData } = req.body;
+  const { companyId, restaurantId, content, messageType, audioData, fileData, fileName, fileMime } = req.body;
   try {
     const d = jwt.verify(token, JWT_SECRET);
     const senderType = d.role === 'restaurant' ? 'restaurant' : 'company';
     const senderId = d.id;
-    const msgType = messageType === 'voice' ? 'voice' : 'text';
+    const msgType = messageType === 'voice' ? 'voice' : messageType === 'file' ? 'file' : 'text';
+    const defaultContent = msgType === 'voice' ? '🎙 Message vocal'
+      : msgType === 'file' ? (fileMime?.startsWith('image/') ? '📷 Photo' : fileMime?.startsWith('video/') ? '🎬 Vidéo' : `📄 ${fileName || 'Fichier'}`)
+      : (content || '');
     const r = await pool.query(
-      'INSERT INTO messages (sender_type,sender_id,company_id,restaurant_id,content,message_type,audio_data) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
-      [senderType, senderId, companyId, restaurantId, content || (msgType === 'voice' ? '🎙 Message vocal' : ''), msgType, audioData || null]
+      'INSERT INTO messages (sender_type,sender_id,company_id,restaurant_id,content,message_type,audio_data,file_data,file_name,file_mime) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',
+      [senderType, senderId, companyId, restaurantId, content || defaultContent, msgType, audioData || null, fileData || null, fileName || null, fileMime || null]
     );
-    const preview = msgType === 'voice' ? '🎙 Message vocal' : content.substring(0, 80);
+    const preview = msgType === 'voice' ? '🎙 Message vocal' : msgType === 'file' ? defaultContent : (content || '').substring(0, 80);
     if (senderType === 'company') {
       await createNotification('restaurant', restaurantId, '💬 Nouveau message', preview, 'message', { companyId, restaurantId });
       const rest = await pool.query('SELECT email,name FROM restaurants WHERE id=$1', [restaurantId]);
