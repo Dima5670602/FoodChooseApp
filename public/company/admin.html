@@ -97,6 +97,12 @@
 
   <!-- ═══ AFFILIATIONS ═══ -->
   <div class="page" id="page-affiliations">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-body" style="padding:12px 16px">
+        <input class="form-control" id="adminDishSearch" placeholder="🔍 Rechercher un plat parmi les restaurants affiliés..." oninput="searchAdminDishes(this.value)" autocomplete="off">
+        <div id="adminDishResults" style="display:none;margin-top:10px"></div>
+      </div>
+    </div>
     <div class="card">
       <div class="card-header"><span class="card-title">🤝 Mes restaurants affiliés</span></div>
       <div class="card-body">
@@ -393,6 +399,32 @@ async function loadDashboard() {
       </div>
     `).join('') : '<div class="empty-state"><span class="icon">🧾</span>Aucune facture</div>';
   } catch(e) { console.error(e); }
+}
+
+// ── Dish search ───────────────────────────────────────
+let adminDishTimer = null;
+async function searchAdminDishes(q) {
+  clearTimeout(adminDishTimer);
+  const results = document.getElementById('adminDishResults');
+  if (!q || q.trim().length < 2) { results.style.display = 'none'; return; }
+  adminDishTimer = setTimeout(async () => {
+    try {
+      const data = await apiFetch(`/api/admin/search?q=${encodeURIComponent(q.trim())}`, {}, token);
+      results.style.display = 'block';
+      if (!data.length) { results.innerHTML = '<div class="empty-state" style="padding:12px"><span class="icon">🔍</span>Aucun plat trouvé</div>'; return; }
+      results.innerHTML = data.map(m => `
+        <div onclick="openRestDetail(${m.restaurant_id})"
+             style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:white;border:1.5px solid var(--border);border-radius:10px;margin-bottom:6px;cursor:pointer;transition:border-color .2s"
+             onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div>
+            <div style="font-weight:600;font-size:13.5px;color:var(--brown)">${m.name}</div>
+            <div style="font-size:11.5px;color:var(--muted)">${CAT_ICONS[m.category]||'🍽'} ${m.category} &nbsp;·&nbsp; 🍽 ${m.restaurant_name}</div>
+          </div>
+          <div style="font-weight:700;color:var(--orange);font-size:13px;white-space:nowrap">${parseFloat(m.price||0).toLocaleString()} FCFA</div>
+        </div>
+      `).join('');
+    } catch(e) {}
+  }, 300);
 }
 
 // ── All Restaurants ───────────────────────────────────

@@ -109,6 +109,10 @@
     </div>
     <div class="topbar-right">
       <span id="topDate" style="font-size:12px;color:var(--muted)"></span>
+      <div style="position:relative">
+        <button class="notif-btn" onclick="toggleNotifDropdown()">🔔<span class="notif-count" id="notifCount" style="display:none">0</span></button>
+        <div class="notif-dropdown" id="notifDropdown"></div>
+      </div>
       <button class="btn-topbar-logout" onclick="logoutEmp()" title="Déconnexion">🚪 Déconnexion</button>
     </div>
   </div>
@@ -117,6 +121,13 @@
 
   <!-- ═══ MEAL CHOICE ═══ -->
   <div class="page active" id="page-meal">
+    <!-- Dish search -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-body" style="padding:12px 16px">
+        <input class="form-control" id="dishSearch" placeholder="🔍 Rechercher un plat..." oninput="searchDishes(this.value)" autocomplete="off">
+        <div id="dishSearchResults" style="display:none;margin-top:10px"></div>
+      </div>
+    </div>
     <!-- Today's order banner -->
     <div id="todayBanner" style="display:none" class="order-banner">
       <div>
@@ -331,9 +342,42 @@ function showApp() {
     else if (page === 'ratings') loadRatingsPage();
   });
   initMealPage();
+  initNotifications();
 }
 
 function logoutEmp() { localStorage.clear(); window.location.href = '/'; }
+
+// ── Dish search ────────────────────────────────────────
+let dishSearchTimer = null;
+async function searchDishes(q) {
+  clearTimeout(dishSearchTimer);
+  const results = document.getElementById('dishSearchResults');
+  if (!q || q.trim().length < 2) { results.style.display = 'none'; return; }
+  dishSearchTimer = setTimeout(async () => {
+    try {
+      const data = await apiFetch(`/api/employee/search?q=${encodeURIComponent(q.trim())}`, {}, empToken);
+      results.style.display = 'block';
+      if (!data.length) { results.innerHTML = '<div class="empty-state" style="padding:12px"><span class="icon">🔍</span>Aucun plat trouvé</div>'; return; }
+      results.innerHTML = data.map(m => `
+        <div onclick="goToRestaurantMenu(${m.restaurant_id}, '${m.restaurant_name.replace(/'/g,"\\'")}', ${m.id})"
+             style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--cream);border:1.5px solid var(--border);border-radius:10px;margin-bottom:6px;cursor:pointer;transition:border-color .2s"
+             onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div>
+            <div style="font-weight:600;font-size:13.5px;color:var(--brown)">${m.name}</div>
+            <div style="font-size:11.5px;color:var(--muted)">🍽 ${m.restaurant_name}</div>
+          </div>
+          <div style="font-weight:700;color:var(--orange);font-size:13px;white-space:nowrap">${parseFloat(m.price||0).toLocaleString()} FCFA</div>
+        </div>
+      `).join('');
+    } catch(e) {}
+  }, 300);
+}
+
+function goToRestaurantMenu(restId, restName, highlightMenuId) {
+  document.getElementById('dishSearch').value = '';
+  document.getElementById('dishSearchResults').style.display = 'none';
+  selectRestaurant(restId, restName);
+}
 
 // ── Meal page ─────────────────────────────────────────
 async function initMealPage() {

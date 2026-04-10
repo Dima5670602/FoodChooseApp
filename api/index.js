@@ -517,7 +517,7 @@ app.put('/api/notifications/read-all', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   try {
     const d = jwt.verify(token, JWT_SECRET);
-    let targetType = d.role === 'restaurant' ? 'restaurant' : 'company';
+    let targetType = d.role === 'restaurant' ? 'restaurant' : d.role === 'employee' ? 'employee' : 'company';
     await pool.query('UPDATE notifications SET read=TRUE WHERE target_type=$1 AND target_id=$2', [targetType, d.id]);
     res.json({ ok: true });
   } catch { res.json({ ok: false }); }
@@ -874,6 +874,37 @@ app.get('/api/admin/conversations', companyOrAdminAuth, async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 //  EMPLOYEE ROUTES
 // ════════════════════════════════════════════════════════════════
+app.get('/api/employee/search', employeeAuth, async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json([]);
+  const r = await pool.query(`
+    SELECT m.id, m.name, m.price, m.category, m.description,
+           r.id AS restaurant_id, r.name AS restaurant_name, r.photo_url
+    FROM menus m
+    JOIN restaurants r ON m.restaurant_id = r.id
+    JOIN affiliations a ON a.restaurant_id = r.id
+    WHERE a.company_id = $1 AND m.available = TRUE AND m.name ILIKE $2
+    ORDER BY m.name LIMIT 20
+  `, [req.user.companyId, `%${q}%`]);
+  res.json(r.rows);
+});
+
+app.get('/api/admin/search', companyOrAdminAuth, async (req, res) => {
+  const companyId = req.user.companyId || req.user.id;
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json([]);
+  const r = await pool.query(`
+    SELECT m.id, m.name, m.price, m.category, m.description,
+           r.id AS restaurant_id, r.name AS restaurant_name, r.photo_url
+    FROM menus m
+    JOIN restaurants r ON m.restaurant_id = r.id
+    JOIN affiliations a ON a.restaurant_id = r.id
+    WHERE a.company_id = $1 AND m.available = TRUE AND m.name ILIKE $2
+    ORDER BY m.name LIMIT 20
+  `, [companyId, `%${q}%`]);
+  res.json(r.rows);
+});
+
 app.get('/api/employee/restaurants', employeeAuth, async (req, res) => {
   const r = await pool.query(`
     SELECT r.id,r.name,r.address,r.specialties,r.photo_url,
@@ -1146,34 +1177,77 @@ app.get('/employee', (req, res) => res.sendFile(path.join(__dirname, '../public/
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 
 // ════════════════════════════════════════════════════════════════
-//  RAPPELS QUOTIDIENS (Lun-Ven, 9h / 10h / 11h)
+//  RAPPELS QUOTIDIENS (Lun-Ven)
+//  9h  → notification in-app
+//  10h → notification in-app
+//  11h → email
 // ════════════════════════════════════════════════════════════════
-cron.schedule('0 9,10,11 * * 1-5', async () => {
+const employeesWithoutOrder = async (today) => {
+  const r = await pool.query(`
+    SELECT u.id, u.email, u.first_name
+    FROM users u
+    WHERE u.company_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id AND o.order_date = $1)
+  `, [today]);
+  return r.rows;
+};
+
+// 9h — notification in-app
+cron.schedule('0 9 * * 1-5', async () => {
   try {
     const today = todayStr();
-    const result = await pool.query(`
-      SELECT u.id, u.email, u.first_name, u.last_name
-      FROM users u
-      WHERE NOT EXISTS (
-        SELECT 1 FROM orders o WHERE o.user_id = u.id AND o.order_date = $1
-      )
-    `, [today]);
-    for (const emp of result.rows) {
-      await sendMail(emp.email, '🍽 N\'oubliez pas votre repas du jour !',
+    const employees = await employeesWithoutOrder(today);
+    for (const emp of employees) {
+      await createNotification('employee', emp.id,
+        '🍽 Choisissez votre repas du jour !',
+        `Bonjour ${emp.first_name} ! Pensez à faire votre choix de repas avant la clôture des commandes.`,
+        'reminder', {});
+    }
+    if (employees.length) console.log(`🔔 Rappels 9h : ${employees.length} employé(s)`);
+  } catch(e) { console.error('Cron 9h error:', e.message); }
+}, { timezone: 'Africa/Abidjan' });
+
+// 10h — notification in-app
+cron.schedule('0 10 * * 1-5', async () => {
+  try {
+    const today = todayStr();
+    const employees = await employeesWithoutOrder(today);
+    for (const emp of employees) {
+      await createNotification('employee', emp.id,
+        '⏰ Rappel — Repas du jour',
+        `${emp.first_name}, vous n'avez pas encore fait votre choix ! Il vous reste encore un peu de temps.`,
+        'reminder', {});
+    }
+    if (employees.length) console.log(`🔔 Rappels 10h : ${employees.length} employé(s)`);
+  } catch(e) { console.error('Cron 10h error:', e.message); }
+}, { timezone: 'Africa/Abidjan' });
+
+// 11h — email
+cron.schedule('0 11 * * 1-5', async () => {
+  try {
+    const today = todayStr();
+    const appUrl = process.env.APP_URL || 'http://localhost:3050';
+    const employees = await employeesWithoutOrder(today);
+    for (const emp of employees) {
+      await createNotification('employee', emp.id,
+        '📧 Dernier rappel — Commandez maintenant',
+        `Un email de rappel a été envoyé à votre adresse. C'est le dernier rappel !`,
+        'reminder', {});
+      sendMail(emp.email, '🍽 Dernier rappel — Repas du jour',
         `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;padding:40px;background:#FFF8F3;border-radius:12px;">
           <h1 style="color:#E85A2A;font-size:28px;">🍽 FoodChooseApp</h1>
           <h2 style="color:#2C1810;">Bonjour ${emp.first_name} !</h2>
           <p style="color:#4A3728;line-height:1.7">Vous n'avez pas encore sélectionné votre repas d'aujourd'hui.<br>
-          Connectez-vous dès maintenant pour faire votre choix avant la clôture des commandes.</p>
+          C'est votre <strong>dernier rappel</strong>. Connectez-vous maintenant pour faire votre choix.</p>
           <div style="text-align:center;margin:24px 0">
-            <div style="display:inline-block;background:#E85A2A;color:white;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px">🍽 Choisir mon repas</div>
+            <a href="${appUrl}/employee" style="display:inline-block;background:#E85A2A;color:white;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none">🍽 Choisir mon repas →</a>
           </div>
           <p style="color:#8B6554;font-size:13px;margin-top:24px;border-top:1px solid #F0E6DE;padding-top:16px">© FoodChooseApp — Plateforme de choix de repas</p>
         </div>`
-      );
+      ).catch(err => console.error('Email rappel 11h:', err));
     }
-    if (result.rows.length > 0) console.log(`📧 Rappels repas envoyés : ${result.rows.length} employé(s)`);
-  } catch(e) { console.error('Cron rappel error:', e.message); }
+    if (employees.length) console.log(`📧 Rappels email 11h : ${employees.length} employé(s)`);
+  } catch(e) { console.error('Cron 11h error:', e.message); }
 }, { timezone: 'Africa/Abidjan' });
 
 if (!process.env.VERCEL) {
