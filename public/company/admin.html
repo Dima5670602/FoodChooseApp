@@ -1106,6 +1106,34 @@ async function changeCompanyPassword() {
     document.getElementById('coPwNew2').value = '';
   } catch(e) { toast(e.message, 'error'); }
 }
+
+// Expose functions globally for onclick handlers
+window.validateOrders = validateOrders;
+window.exportOrdersPDF = exportOrdersPDF;
+window.loadInvoices = loadInvoices;
+window.switchToPage = switchToPage;
+window.loadEmployees = loadEmployees;
+window.createEmployee = createEmployee;
+window.addEmployee = addEmployee;
+window.delEmployee = delEmployee;
+window.loadAffiliations = loadAffiliations;
+window.addAffiliation = addAffiliation;
+window.delAffiliation = delAffiliation;
+window.loadAllRestaurants = loadAllRestaurants;
+window.addAffiliationFromAll = addAffiliationFromAll;
+window.openRestDetail = openRestDetail;
+window.sendMessage = sendMessage;
+window.initChat = initChat;
+window.saveSettings = saveSettings;
+window.handleSettingsPhoto = handleSettingsPhoto;
+window.changeCompanyPassword = changeCompanyPassword;
+window.previewValidate = previewValidate;
+window.loadStats = loadStats;
+window.exportOrdersCSV = exportOrdersCSV;
+window.toggleAffiliation = toggleAffiliation;
+window.clearAdminFile = clearAdminFile;
+window.loadOrders = loadOrders;
+window.loadHistory = loadHistory;
 }); // end DOMContentLoaded
 </script>
 </body>

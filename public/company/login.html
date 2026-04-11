@@ -308,6 +308,14 @@ async function loginCompany() {
     btn.disabled = false; btn.textContent = 'Se connecter';
   }
 }
+
+// Expose functions globally
+window.loginCompany = loginCompany;
+window.fpSendOtp = fpSendOtp;
+window.fpVerifyOtp = fpVerifyOtp;
+window.fpResetPassword = fpResetPassword;
+window.openForgotModal = openForgotModal;
+window.closeForgotModal = closeForgotModal;
 </script>
 </body>
 </html>

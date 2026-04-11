@@ -908,6 +908,33 @@ function exportPDF(period) {
       const a = document.createElement('a'); a.href = url; a.download = `rapport_${period}.pdf`; a.click(); URL.revokeObjectURL(url);
     }).catch(() => toast('Erreur export PDF', 'error'));
 }
+
+// Expose functions globally
+window.logout = logout;
+window.addMenu = addMenu;
+window.editMenu = editMenu;
+window.delMenu = delMenu;
+window.deleteMenu = deleteMenu;
+window.toggleMenu = toggleMenu;
+window.saveProfile = saveProfile;
+window.changeRestPassword = changeRestPassword;
+window.saveSpecialties = saveSpecialties;
+window.savePayments = savePayments;
+window.openDeleteModal = openDeleteModal;
+window.deleteAccount = deleteAccount;
+window.sendInvoice = sendInvoice;
+window.switchToPage = switchToPage;
+window.loadMessages = loadMessages;
+window.sendMessage = sendMessage;
+window.toggleVoiceRecord = toggleVoiceRecord;
+window.openChat = openChat;
+window.sendMsg = sendMsg;
+window.openRestFileUpload = openRestFileUpload;
+window.clearRestFile = clearRestFile;
+window.exportPDF = exportPDF;
+window.exportOrdersPDF = exportOrdersPDF;
+window.loadOrders = loadOrders;
+window.loadMenus = loadMenus;
 }); // end DOMContentLoaded
 </script>
 </body>
