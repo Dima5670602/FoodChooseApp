@@ -279,14 +279,21 @@ app.post('/api/auth/company/login', async (req, res) => {
 // Login employee
 app.post('/api/auth/employee/login', async (req, res) => {
   const { employeeId, password } = req.body;
+  console.log('🔐 Tentative connexion employeeId:', employeeId);
   try {
     const r = await pool.query('SELECT * FROM users WHERE employee_id=$1', [employeeId]);
-    if (!r.rows.length) return res.status(401).json({ error: 'Identifiants incorrects' });
+    console.log('📋 Utilisateurs trouvés:', r.rows.length);
+    if (!r.rows.length) return res.status(401).json({ error: 'Employé non trouvé. Vérifiez votre identifiant ou contactez votre entreprise.' });
     const u = r.rows[0];
-    if (!await bcrypt.compare(password, u.password_hash)) return res.status(401).json({ error: 'Identifiants incorrects' });
+    const passwordMatch = await bcrypt.compare(password, u.password_hash);
+    console.log('🔑 Mot de passe valide:', passwordMatch);
+    if (!passwordMatch) return res.status(401).json({ error: 'Mot de passe incorrect.' });
     const token = jwt.sign({ id: u.id, role: 'employee', employeeId: u.employee_id, name: `${u.first_name} ${u.last_name}`, companyId: u.company_id }, JWT_SECRET, { expiresIn: '8h' });
     res.json({ token, role: 'employee', name: `${u.first_name} ${u.last_name}`, employeeId: u.employee_id, companyId: u.company_id });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('❌ Erreur login employee:', e);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 // ════════════════════════════════════════════════════════════════
