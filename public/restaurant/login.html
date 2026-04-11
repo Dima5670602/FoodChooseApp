@@ -37,6 +37,16 @@
     .back-link{text-align:center;margin-top:14px}
     .back-link a{font-size:12.5px;color:var(--muted);text-decoration:none}
     .back-link a:hover{color:var(--orange)}
+    .form-group{position:relative;margin-bottom:18px}
+    .form-group label{display:block;font-size:12px;font-weight:600;color:var(--brown);margin-bottom:6px;letter-spacing:.3px}
+    .form-control:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(232,90,42,.15);outline:none}
+    .btn-primary{transition:all .2s;position:relative;overflow:hidden}
+    .btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(232,90,42,.3)}
+    .btn-primary:active{transform:translateY(0)}
+    .btn-primary:disabled{opacity:.7;cursor:not-allowed;transform:none}
+    .input-icon{position:relative}
+    .input-icon .form-control{padding-left:40px}
+    .input-icon .input-icon-span{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:16px;opacity:.5}
   </style>
 </head>
 <body>
@@ -64,7 +74,7 @@
       <label>Mot de passe</label>
       <!-- Champ mot de passe avec bouton bascule afficher/masquer -->
       <div class="pw-wrap">
-        <input class="form-control" type="password" id="password" placeholder="Votre mot de passe" required>
+        <input class="form-control" type="password" id="password" placeholder="••••••••" required>
         <button class="pw-toggle" type="button">👁</button>
       </div>
     </div>

@@ -44,6 +44,17 @@
     /* Encadré d'indice informatif (connexion entreprise) */
     .admin-hint{background:#FFF0EA;border:1px solid rgba(232,90,42,.2);border-radius:10px;padding:11px 14px;font-size:12px;color:var(--brown);margin-bottom:16px}
     .admin-hint strong{color:var(--orange)}
+    /* Improved form styling */
+    .form-group{position:relative;margin-bottom:18px}
+    .form-group label{display:block;font-size:12px;font-weight:600;color:var(--brown);margin-bottom:6px;letter-spacing:.3px}
+    .form-control:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(232,90,42,.15);outline:none}
+    .btn-primary{transition:all .2s;position:relative;overflow:hidden}
+    .btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(232,90,42,.3)}
+    .btn-primary:active{transform:translateY(0)}
+    .btn-primary:disabled{opacity:.7;cursor:not-allowed;transform:none}
+    .input-icon{position:relative}
+    .input-icon .form-control{padding-left:40px}
+    .input-icon .input-icon-span{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:16px;opacity:.5}
   </style>
 </head>
 <body>
@@ -72,19 +83,21 @@
   <!-- Formulaire de connexion pour le compte Entreprise -->
   <div class="login-form active" id="form-company">
     <div class="form-group">
-      <label>Adresse email de l'entreprise</label>
-      <input class="form-control" type="email" id="coEmail" placeholder="contact@entreprise.com">
+      <label>Adresse email</label>
+      <div class="input-icon">
+        <input class="form-control" type="email" id="coEmail" placeholder="contact@entreprise.com" onkeydown="if(event.key==='Enter')loginCompany()">
+      </div>
     </div>
     <div class="form-group">
       <label>Mot de passe</label>
       <!-- Champ mot de passe avec bouton bascule afficher/masquer -->
       <div class="pw-wrap">
-        <input class="form-control" type="password" id="coPwd" placeholder="Mot de passe">
+        <input class="form-control" type="password" id="coPwd" placeholder="••••••••" onkeydown="if(event.key==='Enter')loginCompany()">
         <button class="pw-toggle" type="button">👁</button>
       </div>
     </div>
     <!-- Bouton de soumission de la connexion entreprise -->
-    <button class="btn btn-primary" id="coBtnLogin" style="width:100%;padding:14px;margin-top:6px" onclick="loginCompany()">
+    <button class="btn btn-primary" id="coBtnLogin" style="width:100%;padding:14px;margin-top:8px" onclick="loginCompany()">
       Se connecter
     </button>
   </div>
