@@ -1107,44 +1107,48 @@ async function changeCompanyPassword() {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-// Expose functions globally for onclick handlers
-window.validateOrders = validateOrders;
-window.exportOrdersPDF = exportOrdersPDF;
-window.loadInvoices = loadInvoices;
-window.switchToPage = switchToPage;
-window.loadEmployees = loadEmployees;
-window.createEmployee = createEmployee;
-window.delEmployee = deleteEmployee;
-window.loadAffiliations = loadAffiliations;
-window.addAffiliation = toggleAffiliation;
-window.delAffiliation = deaffiliateRest;
-window.loadAllRestaurants = loadAllRestaurants;
-window.addAffiliationFromAll = toggleAffiliation;
-window.openRestDetail = openRestDetail;
-window.openAdminChat = openAdminChat;
-window.sendMessage = sendAdminMsg;
-window.initChat = initChat;
-window.saveSettings = loadSettings;
-window.handleSettingsPhoto = handleSettingsPhoto;
-window.changeCompanyPassword = changeCompanyPassword;
-window.previewValidate = previewValidate;
-window.loadStats = loadDashboard;
-window.exportOrdersCSV = exportOrdersPDF;
-window.toggleAffiliation = toggleAffiliation;
-window.clearAdminFile = clearAdminFile;
-window.loadOrders = loadOrders;
-window.loadHistory = loadHistory;
-window.toggleNotifDropdown = toggleNotifDropdown;
-window.markNotifRead = markNotifRead;
-window.downloadInvoice = loadInvoices;
-window.printInvoice = loadInvoices;
-window.deaffiliateRest = deaffiliateRest;
-window.sendAdminMsg = sendAdminMsg;
-window.sendAdminVoiceMsg = sendAdminVoiceMsg;
-window.toggleAdminVoiceRecord = loadAdminConversations;
-window.openAdminFileUpload = openAdminFileUpload;
-window.exportCompanyOrdersPDF = loadOrders;
-window.printCompanyOrders = loadOrders;
+// Expose ALL functions globally for onclick handlers
+  window.logout = logout;
+  window.validateOrders = validateOrders;
+  window.exportOrdersPDF = exportOrdersPDF;
+  window.loadInvoices = loadInvoices;
+  window.switchToPage = switchToPage;
+  window.loadEmployees = loadEmployees;
+  window.createEmployee = createEmployee;
+  window.addEmployee = createEmployee;
+  window.delEmployee = deleteEmployee;
+  window.deleteEmployee = deleteEmployee;
+  window.loadAffiliations = loadAffiliations;
+  window.toggleAffiliation = toggleAffiliation;
+  window.deaffiliateRest = deaffiliateRest;
+  window.loadAllRestaurants = loadAllRestaurants;
+  window.addAffiliationFromAll = toggleAffiliation;
+  window.openRestDetail = openRestDetail;
+  window.openAdminChat = openAdminChat;
+  window.sendMessage = sendAdminMsg;
+  window.initChat = initChat;
+  window.loadAdminConversations = loadAdminConversations;
+  window.openAdminFileUpload = openAdminFileUpload;
+  window.clearAdminFile = clearAdminFile;
+  window.saveSettings = loadSettings;
+  window.handleSettingsPhoto = handleSettingsPhoto;
+  window.changeCompanyPassword = changeCompanyPassword;
+  window.previewValidate = previewValidate;
+  window.loadStats = loadDashboard;
+  window.loadOrders = loadOrders;
+  window.loadHistory = loadHistory;
+  window.searchAdminDishes = searchAdminDishes;
+  window.toggleNotifDropdown = toggleNotifDropdown;
+  window.markNotifRead = markNotifRead;
+  window.downloadInvoice = loadInvoices;
+  window.printInvoice = loadInvoices;
+  window.sendAdminVoiceMsg = sendAdminVoiceMsg;
+  window.toggleAdminVoiceRecord = loadAdminConversations;
+  window.exportCompanyOrdersPDF = loadOrders;
+  window.printCompanyOrders = loadOrders;
+  window.loadDashboard = loadDashboard;
+  window.sendAdminMsg = sendAdminMsg;
+  window.deaffiliateRest = deaffiliateRest;
 }); // end DOMContentLoaded
 </script>
 </body>
