@@ -452,46 +452,20 @@ async function loadOrders() {
     const total = orders.reduce((s, o) => s + parseFloat(o.price || 0), 0);
     const dateLabel = from && to ? `Du ${from} au ${to}` : (from ? `À partir de ${from}` : (to ? `Jusqu'au ${to}` : `Aujourd'hui`));
     
-    el.innerHTML = `
-      <div style="background:#FFF0EA;border-radius:12px;padding:14px;margin-bottom:14px;font-size:14px">
-        📊 <strong>${orders.length}</strong> commandes — <strong>${total.toLocaleString()} FCFA</strong>
-        <span style="color:var(--muted);font-size:12px;margin-left:8px">${dateLabel}</span>
-      </div>
-      ${Object.entries(byCompany).map(([co, ords]) => {
-        const firstOrder = ords[0];
-        const companyId = firstOrder.company_id;
-        const orderDate = firstOrder.order_date;
-        return `
-        <div style="background:#F9F1EB;border-radius:12px;padding:16px;margin-bottom:14px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <div style="font-weight:700;font-size:15px;color:var(--brown)">🏢 ${co}</div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <span style="font-size:12px;color:var(--muted)">${ords.length} commande(s)</span>
-              <button class="btn btn-outline btn-sm" onclick="createBatchForCompany(${companyId}, '${orderDate}')">📦 Créer batch</button>
-              <button class="btn btn-primary btn-sm" onclick="createInvoiceForCompany('${co}', ${companyId}, '${orderDate}')">🧾 Facture</button>
-            </div>
-          </div>
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
-            <tr style="background:rgba(44,24,16,.05)">
-              <th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Date</th>
-              <th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Employé</th>
-              <th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Menu</th>
-              <th style="padding:7px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Prix</th>
-            </tr>
-            ${ords.map(o=>`<tr>
-              <td style="padding:7px;font-size:12px;color:var(--muted)">${formatDate(o.order_date)}</td>
-              <td style="padding:7px">${o.first_name} ${o.last_name}</td>
-              <td style="padding:7px">${o.menu_name}</td>
-              <td style="padding:7px">${parseFloat(o.price||0).toLocaleString()} FCFA</td>
-            </tr>`).join('')}
-            <tr style="background:rgba(232,90,42,.08)">
-              <td colspan="2" style="padding:7px;font-weight:700">Total ${co}</td>
-              <td colspan="2" style="padding:7px;font-weight:700">${ords.reduce((s,o)=>s+parseFloat(o.price||0),0).toLocaleString()} FCFA</td>
-            </tr>
-          </table>
-        </div>
-      `).join('')}
-    `;
+    var html = '<div style="background:#FFF0EA;border-radius:12px;padding:14px;margin-bottom:14px;font-size:14px">📊 <strong>' + orders.length + '</strong> commandes — <strong>' + total.toLocaleString() + 'FCFA</strong><span style="color:var(--muted);font-size:12px;margin-left:8px">' + dateLabel + '</span></div>';
+    
+    Object.entries(byCompany).forEach(function(_ref) {
+      var co = _ref[0];
+      var ords = _ref[1];
+      var firstOrder = ords[0];
+      var companyId = firstOrder.company_id;
+      var orderDate = firstOrder.order_date;
+      var coTotal = ords.reduce(function(s, o) { return s + parseFloat(o.price || 0); }, 0);
+      var btns = '<div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="createBatchForCompany(' + companyId + ', \'' + orderDate + '\')">📦 Batch</button><button class="btn btn-primary btn-sm" onclick="createInvoiceForCompany(\'' + co + '\', ' + companyId + ', \'' + orderDate + '\')">🧾 Facture</button></div>';
+      html += '<div style="background:#F9F1EB;border-radius:12px;padding:16px;margin-bottom:14px"><div style="display:flex;justify-content:space-between;margin-bottom:12px"><div style="font-weight:700">🏢 ' + co + '</div>' + btns + '</div><table style="width:100%;font-size:13px">' + ords.map(function(o) { return '<tr><td>' + formatDate(o.order_date) + '</td><td>' + o.first_name + ' ' + o.last_name + '</td><td>' + o.menu_name + '</td><td>' + parseFloat(o.price||0).toLocaleString() + 'FCFA</td></tr>'; }).join('') + '<tr style="font-weight:700"><td colspan="3">Total</td><td>' + coTotal.toLocaleString() + 'FCFA</td></tr></table></div>';
+    });
+    
+    el.innerHTML = html;
   } catch(e) { toast('Erreur commandes', 'error'); }
 }
 
@@ -1060,6 +1034,10 @@ window.toggleVoiceRecord = toggleVoiceRecord;
 window.openChat = openChat;
 window.sendMsg = sendMsg;
 window.openRestFileUpload = openRestFileUpload;
+window.loadConversations = loadConversations;
+window.loadMessages = loadMessages;
+window.toggleVoiceRecord = toggleVoiceRecord;
+window.sendMessage = sendMessage;
 window.clearRestFile = clearRestFile;
 window.exportPDF = exportPDF;
 window.exportOrdersPDF = exportOrdersPDF;
