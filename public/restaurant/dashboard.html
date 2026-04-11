@@ -457,11 +457,19 @@ async function loadOrders() {
         📊 <strong>${orders.length}</strong> commandes — <strong>${total.toLocaleString()} FCFA</strong>
         <span style="color:var(--muted);font-size:12px;margin-left:8px">${dateLabel}</span>
       </div>
-      ${Object.entries(byCompany).map(([co, ords]) => `
+      ${Object.entries(byCompany).map(([co, ords]) => {
+        const firstOrder = ords[0];
+        const companyId = firstOrder.company_id;
+        const orderDate = firstOrder.order_date;
+        return `
         <div style="background:#F9F1EB;border-radius:12px;padding:16px;margin-bottom:14px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
             <div style="font-weight:700;font-size:15px;color:var(--brown)">🏢 ${co}</div>
-            <span style="font-size:12px;color:var(--muted)">${ords.length} commande(s)</span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span style="font-size:12px;color:var(--muted)">${ords.length} commande(s)</span>
+              <button class="btn btn-outline btn-sm" onclick="createBatchForCompany(${companyId}, '${orderDate}')">📦 Créer batch</button>
+              <button class="btn btn-primary btn-sm" onclick="createInvoiceForCompany('${co}', ${companyId}, '${orderDate}')">🧾 Facture</button>
+            </div>
           </div>
           <table style="width:100%;border-collapse:collapse;font-size:13px">
             <tr style="background:rgba(44,24,16,.05)">
@@ -547,6 +555,56 @@ async function sendInvoice() {
     await apiFetch(`/api/restaurant/batches/${currentBatchId}/invoice`, { method: 'POST', body: JSON.stringify({ items, totalAmount: total }) }, token);
     toast('Facture envoyée !', 'success');
     document.getElementById('invoiceModal').classList.remove('open');
+    loadOrders();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// Create invoice directly from orders
+async function createBatchForCompany(companyId, batchDate) {
+  try {
+    const d = batchDate || todayStr();
+    const batch = await apiFetch('/api/restaurant/batches', { method: 'POST', body: JSON.stringify({ companyId, batchDate: d }) }, token);
+    toast('✅ Batch créé ! Vous pouvez maintenant créer la facture.', 'success');
+    loadOrders();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function createInvoiceForCompany(companyName, companyId, orderDate) {
+  try {
+    // Get orders for this company on this date
+    const orders = await apiFetch(`/api/restaurant/orders?date=${orderDate}&companyId=${companyId}`, {}, token);
+    if (!orders.length) { toast('Aucune commande trouvée', 'error'); return; }
+    
+    // Group by menu
+    const byMenu = {};
+    orders.forEach(o => {
+      if (!byMenu[o.menu_name]) byMenu[o.menu_name] = { qty: 0, price: parseFloat(o.price||0) };
+      byMenu[o.menu_name].qty++;
+    });
+    const items = Object.entries(byMenu).map(([name, d]) => ({ name, qty: d.qty, price: d.price }));
+    const total = items.reduce((s,i)=>s+i.qty*i.price,0);
+    
+    // Create or find batch
+    let batch;
+    try {
+      batch = await apiFetch('/api/restaurant/batches', { method: 'POST', body: JSON.stringify({ companyId, batchDate: orderDate }) }, token);
+    } catch(e) {
+      // Batch might already exist, try to get it
+      const batches = await apiFetch('/api/restaurant/batches', {}, token);
+      batch = batches.find(b => b.company_id === companyId && b.batch_date === orderDate);
+    }
+    
+    if (!batch) {
+      toast('Erreur création batch', 'error');
+      return;
+    }
+    
+    // Show confirmation
+    if (!confirm(`Envoyer une facture de ${total.toLocaleString()}FCFA à ${companyName} ?`)) return;
+    
+    // Send invoice
+    await apiFetch(`/api/restaurant/batches/${batch.id}/invoice`, { method: 'POST', body: JSON.stringify({ items, totalAmount: total }) }, token);
+    toast(`✅ Facture envoyée à ${companyName} !`, 'success');
     loadOrders();
   } catch(e) { toast(e.message, 'error'); }
 }
@@ -1008,6 +1066,8 @@ window.exportOrdersPDF = exportOrdersPDF;
 window.loadOrders = loadOrders;
 window.loadMenus = loadMenus;
 window.openInvoiceModal = openInvoiceModal;
+window.createBatchForCompany = createBatchForCompany;
+window.createInvoiceForCompany = createInvoiceForCompany;
 }); // end DOMContentLoaded
 </script>
 </body>

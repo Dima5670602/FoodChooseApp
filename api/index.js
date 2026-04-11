@@ -502,9 +502,22 @@ app.get('/api/restaurant/orders/export-pdf', restaurantAuth, async (req, res) =>
 app.get('/api/restaurant/batches', restaurantAuth, async (req, res) => {
   const r = await pool.query(
     'SELECT ob.*,c.name AS company_name FROM order_batches ob JOIN companies c ON ob.company_id=c.id WHERE ob.restaurant_id=$1 ORDER BY ob.created_at DESC LIMIT 50',
-    [req.user.id]
-  );
+    [req.user.id]);
   res.json(r.rows);
+});
+
+// Create a batch (group orders for a company on a date)
+app.post('/api/restaurant/batches', restaurantAuth, async (req, res) => {
+  const { companyId, batchDate } = req.body;
+  if (!companyId || !batchDate) return res.status(400).json({ error: 'companyId et date requis' });
+  try {
+    const d = batchDate || todayStr();
+    const r = await pool.query(
+      'INSERT INTO order_batches (company_id,restaurant_id,batch_date,status) VALUES ($1,$2,$3,\'pending\') ON CONFLICT (company_id,restaurant_id,batch_date) DO UPDATE SET status=\'pending\',created_at=NOW() RETURNING *',
+      [companyId, req.user.id, d]
+    );
+    res.json(r.rows[0]);
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 app.put('/api/restaurant/batches/:id/confirm', restaurantAuth, async (req, res) => {
