@@ -1114,7 +1114,7 @@ app.get('/api/employee/restaurants', employeeAuth, async (req, res) => {
     (SELECT COUNT(*) FROM menus m WHERE m.restaurant_id=r.id AND m.available=TRUE) AS menu_count
     FROM affiliations a JOIN restaurants r ON a.restaurant_id=r.id
     WHERE a.company_id=$1 ORDER BY r.name
-  `, [req.user.id]);
+  `, [req.user.companyId]);
   res.json(r.rows);
 });
 
@@ -1141,13 +1141,13 @@ app.post('/api/employee/order', employeeAuth, async (req, res) => {
     if (!menu.rows.length) return res.status(404).json({ error: 'Menu indisponible' });
     const r = await pool.query(
       'INSERT INTO orders (company_id,restaurant_id,user_id,menu_id,order_date,drink_preference,notes) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
-      [req.user.id, restaurantId, req.user.id, menuId, todayStr(), drinkPreference||null, notes||null]
+      [req.user.companyId, restaurantId, req.user.id, menuId, todayStr(), drinkPreference||null, notes||null]
     );
     if (drinkPreference) await pool.query('UPDATE users SET drink_preference=$1 WHERE id=$2', [drinkPreference, req.user.id]);
     const menuData = await pool.query('SELECT name FROM menus WHERE id=$1', [menuId]);
     const restData = await pool.query('SELECT name FROM restaurants WHERE id=$1', [restaurantId]);
     await pool.query('INSERT INTO order_history (user_id,company_id,employee_id,employee_name,restaurant_name,menu_name,order_date,drink_preference,action) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-      [req.user.id, req.user.id, req.user.employeeId, req.user.name, restData.rows[0]?.name, menuData.rows[0]?.name, todayStr(), drinkPreference||null, 'created']);
+      [req.user.id, req.user.companyId, req.user.employeeId, req.user.name, restData.rows[0]?.name, menuData.rows[0]?.name, todayStr(), drinkPreference||null, 'created']);
     res.status(201).json(r.rows[0]);
   } catch (e) {
     if (e.code==='23505') return res.status(400).json({ error: 'Commande déjà existante pour ce restaurant aujourd\'hui' });
@@ -1165,7 +1165,7 @@ app.put('/api/employee/order/:id', employeeAuth, async (req, res) => {
     if (drinkPreference) await pool.query('UPDATE users SET drink_preference=$1 WHERE id=$2', [drinkPreference, req.user.id]);
     const menuData = await pool.query('SELECT name FROM menus WHERE id=$1', [menuId]);
     await pool.query('INSERT INTO order_history (user_id,company_id,employee_id,employee_name,restaurant_name,menu_name,order_date,drink_preference,action) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-      [req.user.id, req.user.id, req.user.employeeId, req.user.name, '', menuData.rows[0]?.name, ex.rows[0].order_date, drinkPreference||null, 'updated']);
+      [req.user.id, req.user.companyId, req.user.employeeId, req.user.name, '', menuData.rows[0]?.name, ex.rows[0].order_date, drinkPreference||null, 'updated']);
     res.json({ message: 'Commande mise à jour' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1176,7 +1176,7 @@ app.delete('/api/employee/order/:id', employeeAuth, async (req, res) => {
   if (ex.rows[0].status !== 'pending') return res.status(400).json({ error: 'Impossible de supprimer' });
   await pool.query('DELETE FROM orders WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
   await pool.query('INSERT INTO order_history (user_id,company_id,employee_id,employee_name,restaurant_name,menu_name,order_date,action) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-    [req.user.id, req.user.id, req.user.employeeId, req.user.name, ex.rows[0].rest_name, ex.rows[0].menu_name, ex.rows[0].order_date, 'deleted']);
+    [req.user.id, req.user.companyId, req.user.employeeId, req.user.name, ex.rows[0].rest_name, ex.rows[0].menu_name, ex.rows[0].order_date, 'deleted']);
   res.json({ message: 'Supprimée' });
 });
 
