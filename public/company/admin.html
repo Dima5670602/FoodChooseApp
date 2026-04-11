@@ -382,7 +382,6 @@ try {
 } catch(e) { console.error('initNav:', e); }
 try { initNotifications(); } catch(e) { console.error('initNotifications:', e); }
 loadDashboard();
-});
 
 // ── Dashboard ─────────────────────────────────────────
 async function loadDashboard() {
@@ -1104,6 +1103,7 @@ async function changeCompanyPassword() {
     document.getElementById('coPwNew2').value = '';
   } catch(e) { toast(e.message, 'error'); }
 }
+}); // end DOMContentLoaded
 </script>
 </body>
 </html>
