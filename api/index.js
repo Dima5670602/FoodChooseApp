@@ -25,14 +25,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'foodchooseapp_2024_secret';
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-const PUBLIC_DIR = (() => {
-  const candidates = [
-    path.join(__dirname, '../public'),
-    path.join(__dirname, 'public'),
-    path.join(process.cwd(), 'public'),
-  ];
-  return candidates.find(p => { try { return fs.existsSync(p); } catch { return false; } }) || candidates[0];
-})();
+const PUBLIC_DIR = path.join(__dirname, '../public');
 app.use(express.static(PUBLIC_DIR));
 
 // ─── DB ──────────────────────────────────────────────────────────
