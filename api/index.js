@@ -7,6 +7,7 @@ const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const cron = require('node-cron');
 const cloudinary = require('cloudinary').v2;
 
@@ -24,7 +25,15 @@ const JWT_SECRET = process.env.JWT_SECRET || 'foodchooseapp_2024_secret';
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(path.join(__dirname, '../public')));
+const PUBLIC_DIR = (() => {
+  const candidates = [
+    path.join(__dirname, '../public'),
+    path.join(__dirname, 'public'),
+    path.join(process.cwd(), 'public'),
+  ];
+  return candidates.find(p => { try { return fs.existsSync(p); } catch { return false; } }) || candidates[0];
+})();
+app.use(express.static(PUBLIC_DIR));
 
 // ─── DB ──────────────────────────────────────────────────────────
 const pool = new Pool({
@@ -1355,14 +1364,14 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 // ─── Static file serving ──────────────────────────────────────────
-app.get('/restaurant/register', (req, res) => res.sendFile(path.join(__dirname, '../public/restaurant/register.html')));
-app.get('/restaurant/login', (req, res) => res.sendFile(path.join(__dirname, '../public/restaurant/login.html')));
-app.get('/restaurant/dashboard', (req, res) => res.sendFile(path.join(__dirname, '../public/restaurant/dashboard.html')));
-app.get('/company/register', (req, res) => res.sendFile(path.join(__dirname, '../public/company/register.html')));
-app.get('/company/login', (req, res) => res.sendFile(path.join(__dirname, '../public/company/login.html')));
-app.get('/company/admin', (req, res) => res.sendFile(path.join(__dirname, '../public/company/admin.html')));
-app.get('/employee', (req, res) => res.sendFile(path.join(__dirname, '../public/employee/index.html')));
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
+app.get('/restaurant/register', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'restaurant/register.html')));
+app.get('/restaurant/login', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'restaurant/login.html')));
+app.get('/restaurant/dashboard', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'restaurant/dashboard.html')));
+app.get('/company/register', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'company/register.html')));
+app.get('/company/login', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'company/login.html')));
+app.get('/company/admin', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'company/admin.html')));
+app.get('/employee', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'employee/index.html')));
+app.get('*', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
 // ════════════════════════════════════════════════════════════════
 //  RAPPELS QUOTIDIENS (Lun-Ven)

@@ -643,22 +643,24 @@ function showApp() {
   document.getElementById('sidebarName').textContent = name;
 
   // Initialise le comportement de la sidebar (hamburger, overlay mobile)
-  initSidebar();
+  try { initSidebar(); } catch(e) { console.error('initSidebar:', e); }
 
   // Initialise la navigation entre pages :
   // À chaque changement de page, le callback approprié est déclenché
-  initNav(null, (page) => {
-    if (page === 'meal') initMealPage();           // Recharge la page repas
-    else if (page === 'history') loadEmpHistory(); // Recharge l'historique
-    else if (page === 'profile') loadEmpProfile(); // Recharge le profil
-    else if (page === 'ratings') loadRatingsPage();// Recharge la page notes
-  });
+  try {
+    initNav(null, (page) => {
+      if (page === 'meal') initMealPage();           // Recharge la page repas
+      else if (page === 'history') loadEmpHistory(); // Recharge l'historique
+      else if (page === 'profile') loadEmpProfile(); // Recharge le profil
+      else if (page === 'ratings') loadRatingsPage();// Recharge la page notes
+    });
+  } catch(e) { console.error('initNav:', e); }
 
   // Chargement initial de la page repas (page par défaut)
   initMealPage();
 
   // Démarrage du système de notifications en temps réel
-  initNotifications();
+  try { initNotifications(); } catch(e) { console.error('initNotifications:', e); }
 }
 
 /**

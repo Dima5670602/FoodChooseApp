@@ -360,22 +360,24 @@ function switchToPage(page) {
   if (pg) pg.classList.add('active');
 }
 
-initSidebar();
-initPasswordToggles();
-initNav(null, (page) => {
-  if (page === 'dashboard') loadDashboard();
-  else if (page === 'allrestaurants') loadAllRestaurants();
-  else if (page === 'affiliations') loadAffiliations();
-  else if (page === 'orders') { document.getElementById('ordersFrom').value = todayStr(); document.getElementById('ordersTo').value = todayStr(); loadOrders(); }
-  else if (page === 'validate') { document.getElementById('validateFrom').value = todayStr(); document.getElementById('validateTo').value = todayStr(); previewValidate(); }
-  else if (page === 'invoices') loadInvoices();
-  else if (page === 'employees') loadEmployees();
-  else if (page === 'expenses') loadExpenses();
-  else if (page === 'history') {}
-  else if (page === 'messages') { loadAdminConversations(); startMsgPolling(); }
-  else if (page === 'settings') loadSettings();
-});
-initNotifications();
+try { initSidebar(); } catch(e) { console.error('initSidebar:', e); }
+try { initPasswordToggles(); } catch(e) { console.error('initPasswordToggles:', e); }
+try {
+  initNav(null, (page) => {
+    if (page === 'dashboard') loadDashboard();
+    else if (page === 'allrestaurants') loadAllRestaurants();
+    else if (page === 'affiliations') loadAffiliations();
+    else if (page === 'orders') { document.getElementById('ordersFrom').value = todayStr(); document.getElementById('ordersTo').value = todayStr(); loadOrders(); }
+    else if (page === 'validate') { document.getElementById('validateFrom').value = todayStr(); document.getElementById('validateTo').value = todayStr(); previewValidate(); }
+    else if (page === 'invoices') loadInvoices();
+    else if (page === 'employees') loadEmployees();
+    else if (page === 'expenses') loadExpenses();
+    else if (page === 'history') {}
+    else if (page === 'messages') { loadAdminConversations(); startMsgPolling(); }
+    else if (page === 'settings') loadSettings();
+  });
+} catch(e) { console.error('initNav:', e); }
+try { initNotifications(); } catch(e) { console.error('initNotifications:', e); }
 loadDashboard();
 
 // ── Dashboard ─────────────────────────────────────────

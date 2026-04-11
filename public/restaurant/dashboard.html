@@ -318,16 +318,18 @@ let activeBatchId = null;
 function logout() { localStorage.clear(); window.location.href = '/'; }
 
 // Init
-initSidebar();
-initNav(null, (page) => {
-  if (page === 'dashboard') loadDashboard();
-  else if (page === 'orders') { loadCompaniesForFilter(); loadOrders(); }
-  else if (page === 'menus') loadMenus();
-  else if (page === 'ratings') loadRatings();
-  else if (page === 'profile') loadProfile();
-  else if (page === 'messages') { loadConversations(); startMsgPolling(); }
-});
-initNotifications();
+try { initSidebar(); } catch(e) { console.error('initSidebar:', e); }
+try {
+  initNav(null, (page) => {
+    if (page === 'dashboard') loadDashboard();
+    else if (page === 'orders') { loadCompaniesForFilter(); loadOrders(); }
+    else if (page === 'menus') loadMenus();
+    else if (page === 'ratings') loadRatings();
+    else if (page === 'profile') loadProfile();
+    else if (page === 'messages') { loadConversations(); startMsgPolling(); }
+  });
+} catch(e) { console.error('initNav:', e); }
+try { initNotifications(); } catch(e) { console.error('initNotifications:', e); }
 loadDashboard();
 
 // ── Dashboard ────────────────────────────────────────────
