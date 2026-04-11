@@ -139,17 +139,43 @@ async function initDB() {
 initDB();
 
 // ─── Email ────────────────────────────────────────────────────────
+const cleanPassword = (process.env.SMTP_PASS || '').replace(/\s/g, '');
 const mailer = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT) || 587,
   secure: false,
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+  auth: { user: process.env.SMTP_USER, pass: cleanPassword }
 });
 
 async function sendMail(to, subject, html) {
-  if (!process.env.SMTP_USER) return;
-  try { await mailer.sendMail({ from: `"FoodChooseApp" <${process.env.SMTP_USER}>`, to, subject, html }); }
-  catch (e) { console.error('Mail error:', e.message); }
+  if (!process.env.SMTP_USER) {
+    console.log('⚠️ SMTP_USER not configured, skipping email to:', to);
+    return;
+  }
+  try { 
+    await mailer.sendMail({ from: `"FoodChooseApp" <${process.env.SMTP_USER}>`, to, subject, html });
+    console.log('✓ Email sent to:', to);
+    return true;
+  }
+  catch (e) { 
+    console.error('Mail error:', e.message);
+    // Essayez avec d'autres options pour Gmail
+    try {
+      const mailer2 = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        tls: { rejectUnauthorized: false }
+      });
+      await mailer2.sendMail({ from: `"FoodChooseApp" <${process.env.SMTP_USER}>`, to, subject, html });
+      console.log('✓ Email sent (retry) to:', to);
+      return true;
+    } catch(e2) {
+      console.error('Mail retry error:', e2.message);
+      return false;
+    }
+  }
 }
 
 function welcomeEmailHtml(name, extra = '') {
@@ -1191,9 +1217,30 @@ app.post('/api/employee/order', employeeAuth, async (req, res) => {
     );
     if (drinkPreference) await pool.query('UPDATE users SET drink_preference=$1 WHERE id=$2', [drinkPreference, req.user.id]);
     const menuData = await pool.query('SELECT name FROM menus WHERE id=$1', [menuId]);
-    const restData = await pool.query('SELECT name FROM restaurants WHERE id=$1', [restaurantId]);
+    const restData = await pool.query('SELECT name,email FROM restaurants WHERE id=$1', [restaurantId]);
+    const coData = await pool.query('SELECT name FROM companies WHERE id=$1', [req.user.companyId]);
+    const d = todayStr();
     await pool.query('INSERT INTO order_history (user_id,company_id,employee_id,employee_name,restaurant_name,menu_name,order_date,drink_preference,action) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-      [req.user.id, req.user.companyId, req.user.employeeId, req.user.name, restData.rows[0]?.name, menuData.rows[0]?.name, todayStr(), drinkPreference||null, 'created']);
+      [req.user.id, req.user.companyId, req.user.employeeId, req.user.name, restData.rows[0]?.name, menuData.rows[0]?.name, d, drinkPreference||null, 'created']);
+    // Notify restaurant
+    await createNotification('restaurant', restaurantId, '🛒 Nouvelle commande', `Commande de ${coData.rows[0]?.name} pour le ${d}`, 'order', { companyId: req.user.companyId, date: d });
+    // Send email to restaurant
+    try {
+      sendMail(restData.rows[0].email, '🛒 Nouvelle commande — FoodChooseApp',
+        `<div style="font-family:Georgia,serif;padding:40px;background:#FFF8F3;border-radius:12px">
+          <h1 style="color:#E85A2A">🍽 FoodChooseApp</h1>
+          <h2 style="color:#2C1810">Nouvelle commande !</h2>
+          <p style="color:#4A3728;font-size:16px"><strong>${coData.rows[0]?.name}</strong> a passé une commande pour le <strong>${d}</strong></p>
+          <div style="background:#2C1810;border-radius:10px;padding:20px;margin:20px 0">
+            <p style="color:#E85A2A;font-size:12px;margin:0">MENU</p>
+            <p style="color:#FFF8F3;font-size:18px;font-weight:700;margin:4px 0 16px">${menuData.rows[0]?.name}</p>
+            <p style="color:#E85A2A;font-size:12px;margin:0">EMPLOYÉ</p>
+            <p style="color:#FFF8F3;font-size:16px;margin:4px 0">${req.user.name}</p>
+          </div>
+          <p style="color:#8B6554;font-size:13px">Connectez-vous pour confirmer et envoyer la facture.</p>
+        </div>`
+      ).catch(err => console.error('Email commande erreur:', err));
+    } catch(e) {}
     res.status(201).json(r.rows[0]);
   } catch (e) {
     if (e.code==='23505') return res.status(400).json({ error: 'Commande déjà existante pour ce restaurant aujourd\'hui' });
