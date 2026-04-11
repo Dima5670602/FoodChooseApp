@@ -636,9 +636,21 @@ async function addMenu() {
 
 async function toggleMenu(id, cb) {
   try {
-    const r = await apiFetch(`/api/restaurant/menus/${id}/toggle`, { method: 'PUT', body: '{}' }, token);
-    toast(r.available ? 'Menu disponible' : 'Menu désactivé', 'info');
-  } catch(e) { toast('Erreur', 'error'); cb.checked = !cb.checked; }
+    await apiFetch(`/api/restaurant/menus/${id}/toggle`, { method: 'PUT' }, token);
+    loadMenus();
+    if (cb) cb();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// Placeholder for menu edit/delete (used in onclick)
+async function editMenu(id) { toast('Fonctionnalité de modification à venir', 'info'); }
+async function deleteMenu(id) { 
+  if (!confirm('Supprimer ce menu ?')) return;
+  try {
+    await apiFetch(`/api/restaurant/menus/${id}`, { method: 'DELETE' }, token);
+    toast('Menu supprimé', 'success');
+    loadMenus();
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 async function deleteMenu(id) {
@@ -970,7 +982,7 @@ function exportPDF(period) {
 window.logout = logout;
 window.addMenu = addMenu;
 window.editMenu = editMenu;
-window.delMenu = delMenu;
+window.delMenu = deleteMenu;
 window.deleteMenu = deleteMenu;
 window.toggleMenu = toggleMenu;
 window.saveProfile = saveProfile;
@@ -995,6 +1007,7 @@ window.exportPDF = exportPDF;
 window.exportOrdersPDF = exportOrdersPDF;
 window.loadOrders = loadOrders;
 window.loadMenus = loadMenus;
+window.openInvoiceModal = openInvoiceModal;
 }); // end DOMContentLoaded
 </script>
 </body>
