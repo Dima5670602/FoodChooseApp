@@ -505,11 +505,57 @@ app.post('/api/restaurant/batches/:id/invoice', restaurantAuth, async (req, res)
       [batch.rows[0].company_id, req.user.id, req.params.id, totalAmount, JSON.stringify(items||[])]
     );
     await pool.query("UPDATE order_batches SET status='invoiced', total_amount=$1 WHERE id=$2", [totalAmount, req.params.id]);
-    await pool.query("UPDATE orders SET status='invoiced' WHERE company_id=$1 AND restaurant_id=$2 AND order_date=$3", [batch.rows[0].company_id, req.user.id, batch.rows[0].batch_date]);
-    await createNotification('company', batch.rows[0].company_id, '🧾 Nouvelle facture', `Facture de ${req.user.name} pour le ${batch.rows[0].batch_date} — ${totalAmount} FCFA`, 'invoice', { invoiceId: inv.rows[0].id });
+await pool.query("UPDATE orders SET status='invoiced' WHERE company_id=$1 AND restaurant_id=$2 AND order_date=$3", [batch.rows[0].company_id, req.user.id, batch.rows[0].batch_date]);
     const co = await pool.query('SELECT email,name FROM companies WHERE id=$1', [batch.rows[0].company_id]);
-    res.json({ invoiceId: inv.rows[0].id });
+    res.json({ invoiceId: inv.rows[0].id, success: true });
     if (co.rows.length) sendMail(co.rows[0].email, `🧾 Facture reçue — ${req.user.name}`, welcomeEmailHtml(co.rows[0].name, `<p style="color:#4A3728">Vous avez reçu une facture de <strong>${req.user.name}</strong> d'un montant de <strong>${totalAmount} FCFA</strong> pour le ${batch.rows[0].batch_date}.</p>`)).catch(err => console.error('Email facture:', err));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Get restaurant invoices
+app.get('/api/restaurant/invoices', restaurantAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT i.*,c.name AS company_name FROM invoices i JOIN companies c ON i.company_id=c.id WHERE i.restaurant_id=$1 ORDER BY i.created_at DESC', [req.user.id]);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Get single invoice as PDF for restaurant
+app.get('/api/restaurant/invoices/:id/pdf', restaurantAuth, async (req, res) => {
+  try {
+    const inv = await pool.query(`SELECT i.*,r.name AS restaurant_name,r.address AS restaurant_address,c.name AS company_name FROM invoices i JOIN restaurants r ON i.restaurant_id=r.id JOIN companies c ON i.company_id=c.id WHERE i.id=$1 AND i.restaurant_id=$2`, [req.params.id, req.user.id]);
+    if (!inv.rows.length) return res.status(404).json({ error: 'Facture introuvable' });
+    const inv_data = inv.rows[0];
+    const items = Array.isArray(inv_data.items) ? inv_data.items : JSON.parse(inv_data.items||'[]');
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="facture_${req.params.id}.pdf"`);
+    doc.pipe(res);
+    doc.rect(0,0,doc.page.width,110).fill('#E85A2A');
+    doc.fillColor('#FFF8F3').fontSize(26).font('Helvetica-Bold').text('🍽 FoodChooseApp', 50, 30);
+    doc.fontSize(13).font('Helvetica').text('FACTURE', 50, 62);
+    doc.fontSize(10).text(`N° FAC-${String(req.params.id).padStart(5,'0')} | ${new Date(inv_data.created_at).toLocaleDateString('fr-FR')}`, 50, 80);
+    let y = 135;
+    doc.fillColor('#2C1810').fontSize(12).font('Helvetica-Bold').text('DE :', 50, y);
+    doc.fontSize(11).font('Helvetica').fillColor('#4A3728').text(inv_data.restaurant_name, 50, y+16).text(inv_data.restaurant_address||'', 50, y+30);
+    doc.fillColor('#2C1810').fontSize(12).font('Helvetica-Bold').text('POUR :', 300, y);
+    doc.fontSize(11).font('Helvetica').fillColor('#4A3728').text(inv_data.company_name, 300, y+16);
+    y += 80;
+    doc.rect(50,y,doc.page.width-100,22).fill('#2C1810');
+    doc.fillColor('#FFF8F3').fontSize(9).font('Helvetica-Bold').text('DESCRIPTION',58,y+6).text('QTÉ',300,y+6).text('P.U.',380,y+6).text('TOTAL',450,y+6);
+    y += 30;
+    items.forEach((item, i) => {
+      if (i%2===0) doc.rect(50,y-3,doc.page.width-100,18).fill('#FFF8F3');
+      doc.fillColor('#2C1810').fontSize(9).font('Helvetica');
+      doc.text(item.name||'', 58, y).text(String(item.qty||1), 308, y).text(`${item.price||0}FCFA`, 380, y).text(`${(item.qty||1)*(item.price||0)}FCFA`, 450, y);
+      y += 20;
+    });
+    y += 10;
+    doc.rect(350,y,doc.page.width-400,30).fill('#E85A2A');
+    doc.fillColor('#FFF8F3').fontSize(13).font('Helvetica-Bold').text(`TOTAL : ${inv_data.total_amount}FCFA`, 360, y+8);
+    doc.rect(0,doc.page.height-35,doc.page.width,35).fill('#2C1810');
+    doc.fillColor('#8B6554').fontSize(9).text('FoodChooseApp — Gestion des repas d\'entreprise', 50, doc.page.height-20);
+    doc.end();
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
