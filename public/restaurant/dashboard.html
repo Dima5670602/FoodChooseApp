@@ -787,10 +787,12 @@ document.addEventListener('click', (e) => {
 });
 </script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
 const token = localStorage.getItem('fc_token');
 if (!token || localStorage.getItem('fc_role') !== 'restaurant') window.location.href = '/restaurant/login';
 
+function logout() { localStorage.clear(); window.location.href = '/'; }
+
+document.addEventListener('DOMContentLoaded', function() {
 const restName = localStorage.getItem('fc_name') || '—';
 document.getElementById('sidebarName').textContent = restName.substring(0,20);
 
@@ -798,20 +800,30 @@ let msgPollInterval = null;
 let currentChatCompanyId = null;
 let activeBatchId = null;
 
-function logout() { localStorage.clear(); window.location.href = '/'; }
-
 // Init
 try { initSidebar(); } catch(e) { console.error('initSidebar:', e); }
-try {
-  initNav(null, (page) => {
-    if (page === 'dashboard') loadDashboard();
-    else if (page === 'orders') { loadCompaniesForFilter(); loadOrders(); }
-    else if (page === 'menus') loadMenus();
-    else if (page === 'ratings') loadRatings();
-    else if (page === 'profile') loadProfile();
-    else if (page === 'messages') { loadConversations(); startMsgPolling(); }
-  });
-} catch(e) { console.error('initNav:', e); }
+
+function switchToPage(page) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const navItem = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (navItem) navItem.classList.add('active');
+  const pg = document.getElementById(`page-${page}`);
+  if (pg) pg.classList.add('active');
+  if (page === 'dashboard') loadDashboard();
+  else if (page === 'orders') { loadCompaniesForFilter(); loadOrders(); }
+  else if (page === 'menus') loadMenus();
+  else if (page === 'ratings') loadRatings();
+  else if (page === 'profile') loadProfile();
+  else if (page === 'messages') { loadConversations(); startMsgPolling(); }
+}
+
+// Direct click handlers for nav items
+document.querySelectorAll('.nav-item[data-page]').forEach(item => {
+  item.style.cursor = 'pointer';
+  item.addEventListener('click', () => switchToPage(item.dataset.page));
+});
+
 try { initNotifications(); } catch(e) { console.error('initNotifications:', e); }
 loadDashboard();
 

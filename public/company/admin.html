@@ -336,11 +336,13 @@
 
 <script src="/assets/js/utils.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
 const token = localStorage.getItem('fc_token');
 const role = localStorage.getItem('fc_role');
 if (!token || role !== 'company') window.location.href = '/company/login';
 
+function logout() { localStorage.clear(); window.location.href = '/'; }
+
+document.addEventListener('DOMContentLoaded', function() {
 const adminName = localStorage.getItem('fc_name') || '—';
 document.getElementById('sidebarName').textContent = adminName.substring(0,22);
 document.getElementById('sidebarRole').textContent = 'Entreprise';
@@ -353,7 +355,6 @@ let currentDetailAffiliated = false;
 let currentChatRestId = null;
 let msgInterval = null;
 
-function logout() { localStorage.clear(); window.location.href = '/'; }
 function switchToPage(page) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -361,25 +362,28 @@ function switchToPage(page) {
   if (navItem) navItem.classList.add('active');
   const pg = document.getElementById(`page-${page}`);
   if (pg) pg.classList.add('active');
+  if (page === 'dashboard') loadDashboard();
+  else if (page === 'allrestaurants') loadAllRestaurants();
+  else if (page === 'affiliations') loadAffiliations();
+  else if (page === 'orders') { document.getElementById('ordersFrom').value = todayStr(); document.getElementById('ordersTo').value = todayStr(); loadOrders(); }
+  else if (page === 'validate') { document.getElementById('validateFrom').value = todayStr(); document.getElementById('validateTo').value = todayStr(); previewValidate(); }
+  else if (page === 'invoices') loadInvoices();
+  else if (page === 'employees') loadEmployees();
+  else if (page === 'expenses') loadExpenses();
+  else if (page === 'history') {}
+  else if (page === 'messages') { loadAdminConversations(); startMsgPolling(); }
+  else if (page === 'settings') loadSettings();
 }
 
 try { initSidebar(); } catch(e) { console.error('initSidebar:', e); }
 try { initPasswordToggles(); } catch(e) { console.error('initPasswordToggles:', e); }
-try {
-  initNav(null, (page) => {
-    if (page === 'dashboard') loadDashboard();
-    else if (page === 'allrestaurants') loadAllRestaurants();
-    else if (page === 'affiliations') loadAffiliations();
-    else if (page === 'orders') { document.getElementById('ordersFrom').value = todayStr(); document.getElementById('ordersTo').value = todayStr(); loadOrders(); }
-    else if (page === 'validate') { document.getElementById('validateFrom').value = todayStr(); document.getElementById('validateTo').value = todayStr(); previewValidate(); }
-    else if (page === 'invoices') loadInvoices();
-    else if (page === 'employees') loadEmployees();
-    else if (page === 'expenses') loadExpenses();
-    else if (page === 'history') {}
-    else if (page === 'messages') { loadAdminConversations(); startMsgPolling(); }
-    else if (page === 'settings') loadSettings();
-  });
-} catch(e) { console.error('initNav:', e); }
+
+// Direct click handlers for nav items
+document.querySelectorAll('.nav-item[data-page]').forEach(item => {
+  item.style.cursor = 'pointer';
+  item.addEventListener('click', () => switchToPage(item.dataset.page));
+});
+
 try { initNotifications(); } catch(e) { console.error('initNotifications:', e); }
 loadDashboard();
 

@@ -514,23 +514,10 @@
 // Jeton JWT de l'employé connecté, persisté dans localStorage
 let empToken = localStorage.getItem('fc_token');
 
-// Données complètes du profil employé (chargées par loadEmpProfile)
-let empData = null;
-
-// Identifiant du menu actuellement sélectionné dans la grille
-let selectedMenuId = null;
-
-// Objet contenant les détails du menu sélectionné { id, name, price }
-let selectedMenuData = null;
-
-// Identifiant du restaurant sélectionné
-let selectedRestId = null;
-
-// Données de la commande en cours de notation { menuId, restaurantId, date }
-let currentRateOrder = null;
-
-// Note courante (1 à 5) dans le modal de notation
-let currentRating = 0;
+// Fonctions accessibles globalement (appelées depuis onclick HTML)
+function logoutEmp() { localStorage.clear(); window.location.href = '/'; }
+function openForgotModal(type) { _fpType=type; ['fp-step1','fp-step2','fp-step3'].forEach((id,i)=>document.getElementById(id).style.display=i===0?'block':'none'); ['fp-err','fp-err2','fp-err3'].forEach(id=>{const el=document.getElementById(id);el.style.display='none';el.textContent='';}); document.getElementById('fp-email').value=''; document.getElementById('fp-otp').value=''; document.getElementById('fp-pwd').value=''; document.getElementById('fp-pwd2').value=''; const m=document.getElementById('forgotModal'); m.style.display='flex'; initPasswordToggles(); }
+function closeForgotModal() { document.getElementById('forgotModal').style.display='none'; }
 
 // ── Initialisations au chargement de la page ──────────────────────
 document.addEventListener('DOMContentLoaded', function() {
@@ -559,12 +546,6 @@ let _fpType = 'employee';
  * Réinitialise toutes les étapes et les champs avant ouverture.
  * @param {string} type - Type d'utilisateur ('employee')
  */
-function openForgotModal(type) { _fpType=type; ['fp-step1','fp-step2','fp-step3'].forEach((id,i)=>document.getElementById(id).style.display=i===0?'block':'none'); ['fp-err','fp-err2','fp-err3'].forEach(id=>{const el=document.getElementById(id);el.style.display='none';el.textContent='';}); document.getElementById('fp-email').value=''; document.getElementById('fp-otp').value=''; document.getElementById('fp-pwd').value=''; document.getElementById('fp-pwd2').value=''; const m=document.getElementById('forgotModal'); m.style.display='flex'; initPasswordToggles(); }
-
-/**
- * closeForgotModal — Ferme le modal de mot de passe oublié.
- */
-function closeForgotModal() { document.getElementById('forgotModal').style.display='none'; }
 
 /**
  * fpSendOtp — Étape 1 : Envoie un code OTP à l'adresse email saisie.
@@ -662,14 +643,24 @@ function showApp() {
 
   // Initialise la navigation entre pages :
   // À chaque changement de page, le callback approprié est déclenché
-  try {
-    initNav(null, (page) => {
-      if (page === 'meal') initMealPage();           // Recharge la page repas
-      else if (page === 'history') loadEmpHistory(); // Recharge l'historique
-      else if (page === 'profile') loadEmpProfile(); // Recharge le profil
-      else if (page === 'ratings') loadRatingsPage();// Recharge la page notes
-    });
-  } catch(e) { console.error('initNav:', e); }
+  function switchToPage(page) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const navItem = document.querySelector(`.nav-item[data-page="${page}"]`);
+    if (navItem) navItem.classList.add('active');
+    const pg = document.getElementById(`page-${page}`);
+    if (pg) pg.classList.add('active');
+    if (page === 'meal') initMealPage();
+    else if (page === 'history') loadEmpHistory();
+    else if (page === 'profile') loadEmpProfile();
+    else if (page === 'ratings') loadRatingsPage();
+  }
+
+  // Direct click handlers for nav items
+  document.querySelectorAll('.nav-item[data-page]').forEach(item => {
+    item.style.cursor = 'pointer';
+    item.addEventListener('click', () => switchToPage(item.dataset.page));
+  });
 
   // Chargement initial de la page repas (page par défaut)
   initMealPage();
@@ -682,7 +673,6 @@ function showApp() {
  * logoutEmp — Déconnecte l'employé.
  * Efface toutes les données de session (localStorage) et redirige vers l'accueil.
  */
-function logoutEmp() { localStorage.clear(); window.location.href = '/'; }
 
 // ══════════════════════════════════════════════════════════════════
 // MODULE : RECHERCHE DE PLATS
