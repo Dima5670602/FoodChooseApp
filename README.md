@@ -669,4 +669,4 @@ Ce projet est sous licence **MIT**.
 
 ---
 
-*Développé avec ❤️ — El Immeka International · 2026*
+*Développé par L'Ingénieur stagiaire Mahamadi TASSEMBEDO chez El Immeka International · 2026*
