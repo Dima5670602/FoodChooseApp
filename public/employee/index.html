@@ -600,38 +600,12 @@ if (empToken && localStorage.getItem('fc_role') === 'employee') {
 // MODULE : MOT DE PASSE OUBLIÉ (PROCÉDURE OTP EN 3 ÉTAPES)
 // ══════════════════════════════════════════════════════════════════
 
-// Type d'utilisateur pour la procédure de réinitialisation (toujours 'employee' ici)
-let _fpType = 'employee';
-
-/**
- * openForgotModal — Ouvre le modal de mot de passe oublié.
- * Réinitialise toutes les étapes et les champs avant ouverture.
- * @param {string} type - Type d'utilisateur ('employee')
- */
-
-/**
- * fpSendOtp — Étape 1 : Envoie un code OTP à l'adresse email saisie.
- * Appel API : POST /api/auth/forgot-password
- * En cas de succès, passe à l'étape 2 (saisie du code OTP).
- */
 async function fpSendOtp() { const email=document.getElementById('fp-email').value.trim(); const errEl=document.getElementById('fp-err'); errEl.style.display='none'; if(!email){errEl.textContent='Email requis';errEl.style.display='block';return;} try{ await apiFetch('/api/auth/forgot-password',{method:'POST',body:JSON.stringify({email,userType:_fpType})}); document.getElementById('fp-step1').style.display='none'; document.getElementById('fp-step2').style.display='block'; toast('Code envoyé !','success'); }catch(e){errEl.textContent=e.message;errEl.style.display='block';} }
 
-/**
- * fpVerifyOtp — Étape 2 : Vérifie le code OTP à 6 chiffres saisi.
- * Appel API : POST /api/auth/verify-otp
- * En cas de succès, passe à l'étape 3 (nouveau mot de passe).
- */
 async function fpVerifyOtp() { const email=document.getElementById('fp-email').value.trim(); const otp=document.getElementById('fp-otp').value.trim(); const errEl=document.getElementById('fp-err2'); errEl.style.display='none'; if(otp.length!==6){errEl.textContent='Code à 6 chiffres requis';errEl.style.display='block';return;} try{ await apiFetch('/api/auth/verify-otp',{method:'POST',body:JSON.stringify({email,userType:_fpType,otp})}); document.getElementById('fp-step2').style.display='none'; document.getElementById('fp-step3').style.display='block'; }catch(e){errEl.textContent=e.message;errEl.style.display='block';} }
 
-/**
- * fpResetPassword — Étape 3 : Enregistre le nouveau mot de passe.
- * Valide : correspondance des deux champs, longueur minimale (6 car.).
- * Appel API : POST /api/auth/reset-password
- * En cas de succès, ferme le modal et invite à se reconnecter.
- */
 async function fpResetPassword() { const email=document.getElementById('fp-email').value.trim(); const otp=document.getElementById('fp-otp').value.trim(); const pwd=document.getElementById('fp-pwd').value; const pwd2=document.getElementById('fp-pwd2').value; const errEl=document.getElementById('fp-err3'); errEl.style.display='none'; if(pwd!==pwd2){errEl.textContent='Les mots de passe ne correspondent pas';errEl.style.display='block';return;} if(pwd.length<6){errEl.textContent='Minimum 6 caractères';errEl.style.display='block';return;} try{ await apiFetch('/api/auth/reset-password',{method:'POST',body:JSON.stringify({email,userType:_fpType,otp,newPassword:pwd})}); toast('Mot de passe changé ! Connectez-vous.','success'); closeForgotModal(); }catch(e){errEl.textContent=e.message;errEl.style.display='block';} }
 
-// ══════════════════════════════════════════════════════════════════
 // MODULE : AUTHENTIFICATION
 // ══════════════════════════════════════════════════════════════════
 
@@ -1301,6 +1275,9 @@ async function submitRating() {
 // Expose toutes les fonctions appelées depuis les handlers onclick/oninput du HTML
 window.loginEmployee = loginEmployee;
 window.showApp = showApp;
+window.logoutEmp = logoutEmp;
+window.openForgotModal = openForgotModal;
+window.closeForgotModal = closeForgotModal;
 window.searchDishes = searchDishes;
 window.goToRestaurantMenu = goToRestaurantMenu;
 window.initMealPage = initMealPage;
@@ -1315,6 +1292,7 @@ window.setRating = setRating;
 window.submitRating = submitRating;
 window.loadEmpHistory = loadEmpHistory;
 window.clearHistory = clearHistory;
+window.delHistItem = delHistItem;
 window.loadRatingsPage = loadRatingsPage;
 window.loadEmpProfile = loadEmpProfile;
 window.handleEmpPhoto = handleEmpPhoto;
@@ -1322,6 +1300,9 @@ window.changePassword = changePassword;
 window.fpSendOtp = fpSendOtp;
 window.fpVerifyOtp = fpVerifyOtp;
 window.fpResetPassword = fpResetPassword;
+window.initNotifications = initNotifications;
+window.toggleNotifDropdown = toggleNotifDropdown;
+window.searchDishes = searchDishes;
 });
 </script>
 </body>

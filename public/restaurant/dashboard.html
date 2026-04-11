@@ -326,6 +326,7 @@
 const token = localStorage.getItem('fc_token');
 if (!token || localStorage.getItem('fc_role') !== 'restaurant') window.location.href = '/restaurant/login';
 
+// Global functions for onclick handlers
 function logout() { localStorage.clear(); window.location.href = '/'; }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -336,15 +337,12 @@ let msgPollInterval = null;
 let currentChatCompanyId = null;
 let activeBatchId = null;
 
-// Init
-try { initSidebar(); } catch(e) { console.error('initSidebar:', e); }
-
 function switchToPage(page) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  const navItem = document.querySelector(`.nav-item[data-page="${page}"]`);
+  const navItem = document.querySelector('.nav-item[data-page="'+page+'"]');
   if (navItem) navItem.classList.add('active');
-  const pg = document.getElementById(`page-${page}`);
+  const pg = document.getElementById('page-'+page);
   if (pg) pg.classList.add('active');
   if (page === 'dashboard') loadDashboard();
   else if (page === 'orders') { loadCompaniesForFilter(); loadOrders(); }
@@ -355,105 +353,17 @@ function switchToPage(page) {
   else if (page === 'invoices') loadInvoices();
 }
 
-// Direct click handlers for nav items
-document.querySelectorAll('.nav-item[data-page]').forEach(item => {
-  item.style.cursor = 'pointer';
-  item.addEventListener('click', () => switchToPage(item.dataset.page));
-});
-
-try { initNotifications(); } catch(e) { console.error('initNotifications:', e); }
-loadDashboard();
-
-// ── Dashboard ────────────────────────────────────────────
-async function loadDashboard() {
-  try {
-    const s = await apiFetch('/api/restaurant/stats', {}, token);
-    document.getElementById('s-today').textContent = s.today;
-    document.getElementById('s-week').textContent = s.week;
-    document.getElementById('s-month').textContent = s.month;
-    document.getElementById('s-revenue').textContent = (s.revenueMonth||0).toLocaleString();
-    // Chart
-    const chart = document.getElementById('orderChart');
-    if (s.dailyOrders && s.dailyOrders.length) {
-      const max = Math.max(...s.dailyOrders.map(d => parseInt(d.count))) || 1;
-      chart.innerHTML = s.dailyOrders.slice(-14).map(d => `
-        <div class="bar-col">
-          <div class="bar-fill" style="height:${Math.max(4, (parseInt(d.count)/max)*100)}px" title="${d.count} commandes"></div>
-          <div class="bar-label">${d.date.slice(5)}</div>
-        </div>
-      `).join('');
-    } else { chart.innerHTML = '<div style="color:var(--muted);font-size:13px;width:100%;text-align:center">Aucune donnée</div>'; }
-    // Ratings, budget and top clients
-    const topClientsHtml = s.topClients && s.topClients.length 
-      ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-           <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🏆 Top 3 Clients</div>
-           ${s.topClients.map((c, i) => `
-             <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px">
-               <span style="color:var(--brown)"><span style="color:var(--orange);font-weight:700">${i+1}.</span> ${c.name}</span>
-               <span style="color:var(--orange);font-weight:600">${parseFloat(c.total_revenue||0).toLocaleString()} FCA</span>
-             </div>
-           `).join('')}
-         </div>`
-      : '';
-    
-    document.getElementById('ratingStats').innerHTML = `
-      <div style="text-align:center;margin-bottom:14px">
-        <div style="font-size:40px;font-family:Playfair Display,serif;font-weight:700;color:var(--brown)">${s.avgRating}</div>
-        <div style="font-size:18px">${'⭐'.repeat(Math.round(parseFloat(s.avgRating||0)))}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px">${s.totalRatings} avis</div>
-      </div>
-      <hr style="border:none;border-top:1px solid var(--border);margin:12px 0">
-      <div style="font-size:13px;color:var(--muted)">🏢 <strong style="color:var(--brown)">${s.companies}</strong> entreprise(s) affiliée(s)</div>
-      <div style="font-size:13px;color:var(--muted);margin-top:6px">💰 Revenu semaine : <strong style="color:var(--brown)">${(s.revenueWeek||0).toLocaleString()} FCA</strong></div>
-      <div style="font-size:13px;color:var(--muted);margin-top:6px">💵 Budget total : <strong style="color:var(--orange)">${(s.totalRevenue||0).toLocaleString()} FCA</strong></div>
-      ${topClientsHtml}
-    `;
-  } catch(e) { toast('Erreur tableau de bord', 'error'); }
-}
-
-// ── Orders ───────────────────────────────────────────────
-let allCompanies = [];
-
-async function loadCompaniesForFilter() {
-  try {
-    allCompanies = await apiFetch('/api/restaurant/companies', {}, token);
-    const sel = document.getElementById('companyFilter');
-    sel.innerHTML = '<option value="">Toutes les entreprises</option>' + 
-      allCompanies.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-  } catch(e) { console.error('Error loading companies:', e); }
-}
-
-async function loadOrders() {
-  const from = document.getElementById('ordersFrom').value;
-  const to = document.getElementById('ordersTo').value;
-  const companyId = document.getElementById('companyFilter').value;
-  
-  // Default to today if no dates provided
-  let url = '/api/restaurant/orders?';
-  if (from && to) {
-    url += `from=${from}&to=${to}${companyId ? '&companyId=' + companyId : ''}`;
-  } else if (from && !to) {
-    url += `from=${from}&to=${from}${companyId ? '&companyId=' + companyId : ''}`;
-  } else if (!from && to) {
-    url += `from=${to}&to=${to}${companyId ? '&companyId=' + companyId : ''}`;
-  } else {
-    url += `date=${todayStr()}${companyId ? '&companyId=' + companyId : ''}`;
-  }
-  
-  try {
-    const orders = await apiFetch(url, {}, token);
-    const el = document.getElementById('batchesList');
-    if (!orders.length) { el.innerHTML = '<div class="empty-state"><span class="icon">🛒</span>Aucune commande pour cette période</div>'; return; }
-    
-    // Group by company
-    const byCompany = {};
-    orders.forEach(o => { if (!byCompany[o.company_name]) byCompany[o.company_name] = []; byCompany[o.company_name].push(o); });
-    
-    const total = orders.reduce((s, o) => s + parseFloat(o.price || 0), 0);
-    const dateLabel = from && to ? `Du ${from} au ${to}` : (from ? `À partir de ${from}` : (to ? `Jusqu'au ${to}` : `Aujourd'hui`));
-    
-    var html = '<div style="background:#FFF0EA;border-radius:12px;padding:14px;margin-bottom:14px;font-size:14px">📊 <strong>' + orders.length + '</strong> commandes — <strong>' + total.toLocaleString() + 'FCFA</strong><span style="color:var(--muted);font-size:12px;margin-left:8px">' + dateLabel + '</span></div>';
-    
+function loadOrders(from, to, companyId) {
+  var url = '/api/restaurant/orders';
+  var params = [];
+  if (from || to || companyId) { url += '?'; var parts = []; if (from) { parts.push('from='+from); } if (to) { parts.push('to='+to); } if (companyId) { parts.push('companyId='+companyId); } url += parts.join('&'); }
+  apiFetch(url, {}, token).then(function(orders) {
+    var el = document.getElementById('batchesList');
+    if (!orders.length) { el.innerHTML = '<div class="empty-state"><span class="icon">🛒</span>Aucune commande</div>'; return; }
+    var byCompany = {};
+    orders.forEach(function(o) { if (!byCompany[o.company_name]) byCompany[o.company_name] = []; byCompany[o.company_name].push(o); });
+    var total = orders.reduce(function(s, o) { return s + parseFloat(o.price || 0); }, 0);
+    el.innerHTML = '<div style="background:#FFF0EA;padding:14px;margin-bottom:14px">📊 <strong>'+orders.length+'</strong> commandes — <strong>'+total.toLocaleString()+'FCFA</strong></div>';
     Object.entries(byCompany).forEach(function(_ref) {
       var co = _ref[0];
       var ords = _ref[1];
@@ -461,591 +371,63 @@ async function loadOrders() {
       var companyId = firstOrder.company_id;
       var orderDate = firstOrder.order_date;
       var coTotal = ords.reduce(function(s, o) { return s + parseFloat(o.price || 0); }, 0);
-      var btns = '<div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="createBatchForCompany(' + companyId + ', \'' + orderDate + '\')">📦 Batch</button><button class="btn btn-primary btn-sm" onclick="createInvoiceForCompany(\'' + co + '\', ' + companyId + ', \'' + orderDate + '\')">🧾 Facture</button></div>';
-      html += '<div style="background:#F9F1EB;border-radius:12px;padding:16px;margin-bottom:14px"><div style="display:flex;justify-content:space-between;margin-bottom:12px"><div style="font-weight:700">🏢 ' + co + '</div>' + btns + '</div><table style="width:100%;font-size:13px">' + ords.map(function(o) { return '<tr><td>' + formatDate(o.order_date) + '</td><td>' + o.first_name + ' ' + o.last_name + '</td><td>' + o.menu_name + '</td><td>' + parseFloat(o.price||0).toLocaleString() + 'FCFA</td></tr>'; }).join('') + '<tr style="font-weight:700"><td colspan="3">Total</td><td>' + coTotal.toLocaleString() + 'FCFA</td></tr></table></div>';
+      el.innerHTML += '<div style="background:#F9F1EB;padding:16px;margin-bottom:14px"><div style="display:flex;justify-content:space-between;margin-bottom:12px"><div>🏢 '+co+'</div><div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="createBatchForCompany('+companyId+', \''+orderDate+'\')">📦 Batch</button><button class="btn btn-primary btn-sm" onclick="createInvoiceForCompany(\''+co+'\', '+companyId+', \''+orderDate+'\')">🧾 Facture</button></div></div></div>';
     });
-    
-    el.innerHTML = html;
-  } catch(e) { toast('Erreur commandes', 'error'); }
-}
-
-function exportOrdersPDF() {
-  const from = document.getElementById('ordersFrom').value;
-  const to = document.getElementById('ordersTo').value;
-  const companyId = document.getElementById('companyFilter').value;
-  
-  if (!from || !to) { toast('Veuillez sélectionner les dates de début et de fin', 'error'); return; }
-  
-  let url = `/api/restaurant/orders/export-pdf?from=${from}&to=${to}`;
-  if (companyId) url += `&companyId=${companyId}`;
-  
-  fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-    .then(r => r.blob()).then(blob => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `commandes_${from}_${to}.pdf`; a.click(); URL.revokeObjectURL(url);
-    }).catch(() => toast('Erreur export PDF', 'error'));
-}
-
-async function confirmBatch(batchId) {
-  if (!confirm('Confirmer la réception de cette commande ?')) return;
-  try {
-    await apiFetch(`/api/restaurant/batches/${batchId}/confirm`, { method: 'PUT', body: '{}' }, token);
-    toast('Commande confirmée !', 'success');
-    loadOrders();
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-// Invoice
-let currentBatchId = null;
-let currentBatchCompany = null;
-function openInvoiceModal(batchId, company) {
-  currentBatchId = batchId; currentBatchCompany = company;
-  // Récupérer la date du filtre actif (ordersFrom) ou aujourd'hui par défaut
-  const date = document.getElementById('ordersFrom').value || todayStr();
-  apiFetch(`/api/restaurant/orders?date=${date}`, {}, token).then(orders => {
-    const byMenu = {};
-    orders.filter(o => o.company_name === company).forEach(o => {
-      if (!byMenu[o.menu_name]) byMenu[o.menu_name] = { qty: 0, price: parseFloat(o.price||0) };
-      byMenu[o.menu_name].qty++;
-    });
-    const items = Object.entries(byMenu).map(([name, d]) => ({ name, qty: d.qty, price: d.price }));
-    const total = items.reduce((s,i)=>s+i.qty*i.price,0);
-    window._invoiceItems = items;
-    document.getElementById('invoiceItems').innerHTML = items.map((it,i) => `
-      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-        <span>${it.name} × ${it.qty}</span>
-        <span>${(it.qty*it.price).toLocaleString()} FCFA</span>
-      </div>
-    `).join('');
-    document.getElementById('invoiceTotal').textContent = total.toLocaleString();
-    document.getElementById('invoiceModal').classList.add('open');
   });
 }
 
-async function sendInvoice() {
-  const items = window._invoiceItems || [];
-  const total = items.reduce((s,i)=>s+i.qty*i.price,0);
-  try {
-    await apiFetch(`/api/restaurant/batches/${currentBatchId}/invoice`, { method: 'POST', body: JSON.stringify({ items, totalAmount: total }) }, token);
-    toast('Facture envoyée !', 'success');
-    document.getElementById('invoiceModal').classList.remove('open');
-    loadOrders();
-  } catch(e) { toast(e.message, 'error'); }
+async function confirmBatch(batchId) {
+  await apiFetch('/api/restaurant/batches/'+batchId+'/confirm', { method: 'PUT' }, token);
+  toast('Commande confirmée!', 'success');
+  loadOrders();
 }
 
-// Create invoice directly from orders
-async function createBatchForCompany(companyId, batchDate) {
-  try {
-    const d = batchDate || todayStr();
-    const batch = await apiFetch('/api/restaurant/batches', { method: 'POST', body: JSON.stringify({ companyId, batchDate: d }) }, token);
-    toast('✅ Batch créé ! Vous pouvez maintenant créer la facture.', 'success');
-    loadOrders();
-  } catch(e) { toast(e.message, 'error'); }
-}
+// Attach nav click handlers
+document.querySelectorAll('.nav-item[data-page]').forEach(function(item) {
+  item.style.cursor = 'pointer';
+  item.addEventListener('click', function() { switchToPage(item.dataset.page); });
+});
 
-async function createInvoiceForCompany(companyName, companyId, orderDate) {
-  try {
-    // Get orders for this company on this date
-    const orders = await apiFetch(`/api/restaurant/orders?date=${orderDate}&companyId=${companyId}`, {}, token);
-    if (!orders.length) { toast('Aucune commande trouvée', 'error'); return; }
-    
-    // Group by menu
-    const byMenu = {};
-    orders.forEach(o => {
-      if (!byMenu[o.menu_name]) byMenu[o.menu_name] = { qty: 0, price: parseFloat(o.price||0) };
-      byMenu[o.menu_name].qty++;
-    });
-    const items = Object.entries(byMenu).map(([name, d]) => ({ name, qty: d.qty, price: d.price }));
-    const total = items.reduce((s,i)=>s+i.qty*i.price,0);
-    
-    // Create or find batch
-    let batch;
-    try {
-      batch = await apiFetch('/api/restaurant/batches', { method: 'POST', body: JSON.stringify({ companyId, batchDate: orderDate }) }, token);
-    } catch(e) {
-      // Batch might already exist, try to get it
-      const batches = await apiFetch('/api/restaurant/batches', {}, token);
-      batch = batches.find(b => b.company_id === companyId && b.batch_date === orderDate);
-    }
-    
-    if (!batch) {
-      toast('Erreur création batch', 'error');
-      return;
-    }
-    
-    // Show confirmation
-    if (!confirm(`Envoyer une facture de ${total.toLocaleString()}FCFA à ${companyName} ?`)) return;
-    
-    // Send invoice
-    await apiFetch(`/api/restaurant/batches/${batch.id}/invoice`, { method: 'POST', body: JSON.stringify({ items, totalAmount: total }) }, token);
-    toast(`✅ Facture envoyée à ${companyName} !`, 'success');
-    loadOrders();
-  } catch(e) { toast(e.message, 'error'); }
-}
+// Init
+try { initSidebar(); } catch(e) { console.error('initSidebar:', e); }
+try { initNotifications(); } catch(e) { console.error('initNotifications:', e); }
+loadDashboard();
 
-// ── Invoices ─────────────────────────────────────────────
-async function loadInvoices() {
-  try {
-    const invs = await apiFetch('/api/restaurant/invoices', {}, token);
-    const tb = document.getElementById('invoicesBody');
-    if (!invs.length) { tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><span class="icon">🧾</span>Aucune facture</div></td></tr>'; return; }
-    tb.innerHTML = invs.map(inv => `<tr>
-      <td style="font-size:11px;color:var(--muted)">FAC-${String(inv.id).padStart(5,'0')}</td>
-      <td><strong>${inv.company_name}</strong></td>
-      <td>${formatDate(inv.created_at)}</td>
-      <td style="font-weight:700;color:var(--orange)">${parseFloat(inv.total_amount||0).toLocaleString()}FCFA</td>
-      <td>
-        <button class="btn btn-outline btn-sm" onclick="downloadRestInvoice(${inv.id})">⬇️ PDF</button>
-        <button class="btn btn-primary btn-sm" onclick="printRestInvoice(${inv.id})">🖨️</button>
-      </td>
-    </tr>`).join('');
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-function downloadRestInvoice(id) {
-  fetch(`/api/restaurant/invoices/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } })
-    .then(r => r.blob()).then(blob => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `facture_${id}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }).catch(() => toast('Erreur PDF', 'error'));
-}
-
-function printRestInvoice(id) {
-  fetch(`/api/restaurant/invoices/${id}/pdf`, { headers: { Authorization: `Bearer ${token}` } })
-    .then(r => r.blob()).then(blob => {
-      const url = URL.createObjectURL(blob);
-      const w = window.open(url);
-      w.onload = () => w.print();
-    }).catch(() => toast('Erreur impression', 'error'));
-}
-
-// ── Menus ────────────────────────────────────────────────
-async function loadMenus() {
-  try {
-    const menus = await apiFetch('/api/restaurant/menus', {}, token);
-    const el = document.getElementById('menusTableWrap');
-    if (!menus.length) { el.innerHTML = '<div class="empty-state"><span class="icon">🍜</span>Aucun menu. Ajoutez-en un !</div>'; return; }
-    const catGroups = {};
-    menus.forEach(m => { if (!catGroups[m.category]) catGroups[m.category] = []; catGroups[m.category].push(m); });
-    el.innerHTML = Object.entries(catGroups).map(([cat, items]) => `
-      <div style="margin-bottom:16px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">${CAT_ICONS[cat]||'🍽'} ${cat}</div>
-        ${items.map(m => `
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:white;border-radius:10px;margin-bottom:6px;border:1px solid var(--border)">
-            <div style="flex:1">
-              <div style="font-weight:600;font-size:13.5px;color:var(--brown)">${m.name}</div>
-              ${m.description?`<div style="font-size:12px;color:var(--muted)">${m.description}</div>`:''}
-              <div style="font-size:12px;color:var(--orange);font-weight:600;margin-top:2px">${parseFloat(m.price||0).toLocaleString()} FCFA</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <label class="toggle" title="${m.available?'Disponible — cliquer pour désactiver':'Indisponible — cliquer pour activer'}">
-                <input type="checkbox" ${m.available?'checked':''} onchange="toggleMenu(${m.id}, this)">
-                <div class="toggle-slider"></div>
-              </label>
-              <button class="btn btn-danger btn-sm" onclick="deleteMenu(${m.id})">🗑</button>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    `).join('');
-  } catch(e) { toast('Erreur', 'error'); }
-}
-
-async function addMenu() {
-  const name = document.getElementById('menuName').value.trim();
-  if (!name) { toast('Nom requis', 'error'); return; }
-  try {
-    await apiFetch('/api/restaurant/menus', { method: 'POST', body: JSON.stringify({ name, description: document.getElementById('menuDesc').value, category: document.getElementById('menuCat').value, price: document.getElementById('menuPrice').value }) }, token);
-    toast(`Menu "${name}" ajouté`, 'success');
-    document.getElementById('menuName').value = ''; document.getElementById('menuDesc').value = ''; document.getElementById('menuPrice').value = '';
-    loadMenus();
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function toggleMenu(id, cb) {
-  try {
-    await apiFetch(`/api/restaurant/menus/${id}/toggle`, { method: 'PUT' }, token);
-    loadMenus();
-    if (cb) cb();
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-// Placeholder for menu edit/delete (used in onclick)
-async function editMenu(id) { toast('Fonctionnalité de modification à venir', 'info'); }
-async function deleteMenu(id) { 
-  if (!confirm('Supprimer ce menu ?')) return;
-  try {
-    await apiFetch(`/api/restaurant/menus/${id}`, { method: 'DELETE' }, token);
-    toast('Menu supprimé', 'success');
-    loadMenus();
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function deleteMenu(id) {
-  if (!confirm('Supprimer ce menu ?')) return;
-  await apiFetch(`/api/restaurant/menus/${id}`, { method: 'DELETE' }, token);
-  toast('Menu supprimé', 'success'); loadMenus();
-}
-
-// ── Ratings ──────────────────────────────────────────────
-async function loadRatings() {
-  try {
-    const r = await apiFetch('/api/restaurant/ratings', {}, token);
-    const tb = document.getElementById('ratingsTableBody');
-    if (!r.length) { tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><span class="icon">⭐</span>Aucun avis</div></td></tr>'; return; }
-    tb.innerHTML = r.map(rt => `<tr>
-      <td><strong>${rt.menu_name}</strong></td>
-      <td>${rt.first_name} ${rt.last_name}</td>
-      <td>${'⭐'.repeat(rt.score)}${'☆'.repeat(5-rt.score)}</td>
-      <td style="color:var(--muted);font-size:12px">${rt.comment||'—'}</td>
-      <td style="font-size:12px">${formatDate(rt.order_date)}</td>
-    </tr>`).join('');
-  } catch(e) {}
-}
-
-// ── Profile ──────────────────────────────────────────────
-let profileData = null;
-async function loadProfile() {
-  try {
-    profileData = await apiFetch('/api/restaurant/profile', {}, token);
-    document.getElementById('pName').value = profileData.name||'';
-    document.getElementById('pPhone').value = profileData.phone||'';
-    document.getElementById('pLocation').value = profileData.location||'';
-    document.getElementById('pAddress').value = profileData.address||'';
-    const pi = document.getElementById('photoImg');
-    if (profileData.photo_url) {
-      pi.src = profileData.photo_url; pi.style.display = 'block';
-      document.getElementById('photoPreview').style.background = 'transparent';
-      const av = document.getElementById('sidebarAvatar');
-      av.innerHTML = `<img src="${profileData.photo_url}" style="width:100%;height:100%;object-fit:cover">`;
-    }
-    initPasswordToggles();
-    renderSpecialties('profileSpecialties', profileData.specialties||[]);
-    renderPaymentFields('profilePayments', profileData.payment_types||[]);
-  } catch(e) { toast('Erreur profil', 'error'); }
-}
-
-async function handlePhoto(input) {
-  if (!input.files[0]) return;
-  const b64 = await readFileAsBase64(input.files[0]);
-  document.getElementById('photoImg').src = b64;
-  document.getElementById('photoImg').style.display = 'block';
-  document.getElementById('photoPreview').style.background = 'transparent';
-  try {
-    await apiFetch('/api/restaurant/profile', { method: 'PUT', body: JSON.stringify({ photoUrl: b64 }) }, token);
-    document.getElementById('sidebarAvatar').innerHTML = `<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
-    toast('Photo mise à jour !', 'success');
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function saveProfile() {
-  const photoUrl = document.getElementById('photoImg').src || null;
-  try {
-    await apiFetch('/api/restaurant/profile', { method: 'PUT', body: JSON.stringify({ name: document.getElementById('pName').value, phone: document.getElementById('pPhone').value, location: document.getElementById('pLocation').value, address: document.getElementById('pAddress').value, paymentTypes: profileData?.payment_types||[], specialties: profileData?.specialties||[], photoUrl: (photoUrl && !photoUrl.startsWith('data:')) ? photoUrl : null }) }, token);
-    toast('Profil mis à jour !', 'success');
-    localStorage.setItem('fc_name', document.getElementById('pName').value);
-    document.getElementById('sidebarName').textContent = document.getElementById('pName').value;
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function changeRestPassword() {
-  const cur = document.getElementById('pwCurrent').value;
-  const nw = document.getElementById('pwNew').value;
-  const nw2 = document.getElementById('pwNew2').value;
-  if (!cur || !nw) { toast('Remplissez tous les champs', 'error'); return; }
-  if (nw !== nw2) { toast('Les mots de passe ne correspondent pas', 'error'); return; }
-  if (nw.length < 6) { toast('Minimum 6 caractères', 'error'); return; }
-  try {
-    await apiFetch('/api/restaurant/password', { method: 'PUT', body: JSON.stringify({ currentPassword: cur, newPassword: nw }) }, token);
-    toast('Mot de passe mis à jour !', 'success');
-    document.getElementById('pwCurrent').value = '';
-    document.getElementById('pwNew').value = '';
-    document.getElementById('pwNew2').value = '';
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function saveSpecialties() {
-  const sp = getSelectedSpecialties('profileSpecialties');
-  // Include any custom specialties the user added
-  const allSpecialties = [...sp, ...customSpecialties.filter(s => !sp.includes(s))];
-  await apiFetch('/api/restaurant/profile', { method: 'PUT', body: JSON.stringify({ name: profileData?.name, phone: profileData?.phone, location: profileData?.location, address: profileData?.address, paymentTypes: profileData?.payment_types||[], specialties: allSpecialties }) }, token);
-  toast('Spécialités mises à jour', 'success');
-}
-
-async function savePayments() {
-  const pt = getPaymentTypes('profilePayments');
-  await apiFetch('/api/restaurant/profile', { method: 'PUT', body: JSON.stringify({ name: profileData?.name, phone: profileData?.phone, location: profileData?.location, address: profileData?.address, paymentTypes: pt, specialties: profileData?.specialties||[] }) }, token);
-  toast('Modes de paiement mis à jour', 'success');
-}
-
-function openDeleteModal() { document.getElementById('deleteModal').classList.add('open'); }
-
-async function deleteAccount() {
-  const reason = document.getElementById('delReason').value.trim();
-  const experience = document.getElementById('delExp').value;
-  const issue = document.getElementById('delIssue').value.trim();
-  const confirmed = document.getElementById('delConfirm').checked;
-  if (!reason || !experience) { toast('Veuillez répondre aux questions 1 et 2', 'error'); return; }
-  if (!confirmed) { toast('Cochez la case de confirmation (question 4)', 'error'); return; }
-  if (!confirm('DERNIÈRE CONFIRMATION : Supprimer définitivement votre compte ?')) return;
-  try {
-    await apiFetch('/api/restaurant/account', { method: 'DELETE', body: JSON.stringify({ reason, experience, issue, confirmed }) }, token);
-    toast('Compte supprimé', 'success');
-    setTimeout(() => { localStorage.clear(); window.location.href = '/'; }, 1500);
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-// ── Messages ─────────────────────────────────────────────
-let msgInterval = null;
-async function loadConversations() {
-  try {
-    const convs = await apiFetch('/api/restaurant/conversations', {}, token);
-    const el = document.getElementById('convList');
-    if (!convs.length) { el.innerHTML = '<div class="empty-state" style="padding:16px"><span class="icon">💬</span>Aucune conversation</div>'; return; }
-    let totalUnread = 0;
-    el.innerHTML = convs.map(c => {
-      totalUnread += parseInt(c.unread||0);
-      return `<div class="chat-conv ${currentChatCompanyId==c.company_id?'active':''}" onclick="openChat(${c.company_id}, '${c.company_name.replace(/'/g,"\\'")}', '${c.logo_url||''}')">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div class="chat-conv-name">${c.company_name}</div>
-          ${c.unread>0?`<span style="background:var(--orange);color:white;font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px">${c.unread}</span>`:''}
-        </div>
-        <div class="chat-conv-last">${c.last_message||'Pas encore de message'}</div>
-      </div>`;
-    }).join('');
-    const b = document.getElementById('msgBadge');
-    if (totalUnread > 0) { b.textContent = totalUnread; b.style.display = 'inline'; }
-    else { b.style.display = 'none'; }
-  } catch(e) {}
-}
-
-// ── File upload (restaurant) ──────────────────────────
-let pendingRestFile = null;
-
-async function openRestFileUpload() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*,application/pdf,video/mp4,video/webm,video/quicktime';
-  input.onchange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const mime = file.type;
-    let data, fileType;
-    if (mime.startsWith('image/')) {
-      fileType = 'image';
-      data = await compressImage(file);
-    } else if (mime === 'application/pdf') {
-      fileType = 'pdf';
-      if (file.size > 3 * 1024 * 1024) { toast('PDF trop volumineux (max 3 Mo)', 'error'); return; }
-      data = await readFileAsBase64(file);
-    } else if (mime.startsWith('video/')) {
-      fileType = 'video';
-      if (file.size > 3 * 1024 * 1024) { toast('Vidéo trop volumineuse (max 3 Mo)', 'error'); return; }
-      const dur = await checkVideoDuration(file);
-      if (dur > 32) { toast('Vidéo trop longue (max 30s)', 'error'); return; }
-      data = await readFileAsBase64(file);
-    } else { toast('Type non supporté (image, PDF ou vidéo)', 'error'); return; }
-    pendingRestFile = { data, name: file.name, mime, type: fileType };
-    showRestFilePreview();
-  };
-  input.click();
-}
-
-function showRestFilePreview() {
-  const bar = document.getElementById('restFilePreviewBar');
-  if (!bar || !pendingRestFile) return;
-  bar.style.display = 'flex';
-  let inner = '';
-  if (pendingRestFile.type === 'image') {
-    inner = `<div class="file-thumb"><img src="${pendingRestFile.data}"><button class="file-thumb-del" onclick="clearRestFile()">✕</button></div>`;
-  } else if (pendingRestFile.type === 'video') {
-    inner = `<div class="file-thumb">🎬<span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pendingRestFile.name}</span><button class="file-thumb-del" onclick="clearRestFile()">✕</button></div>`;
-  } else {
-    inner = `<div class="file-thumb">📄<span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pendingRestFile.name}</span><button class="file-thumb-del" onclick="clearRestFile()">✕</button></div>`;
-  }
-  bar.innerHTML = inner;
-}
-
-function clearRestFile() {
-  pendingRestFile = null;
-  const bar = document.getElementById('restFilePreviewBar');
-  if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
-}
-
-// ── Voice recording (restaurant) ──────────────────────
-let restVoiceRecorder = null, restVoiceChunks = [], restVoiceTimer = null, restIsRecording = false;
-
-function toggleVoiceRecord(companyId) {
-  if (restIsRecording) {
-    if (restVoiceRecorder && restVoiceRecorder.state === 'recording') restVoiceRecorder.stop();
-    clearInterval(restVoiceTimer); restIsRecording = false;
-    document.getElementById('recordBtn')?.classList.remove('recording');
-    document.getElementById('recordTimer').textContent = '';
-  } else {
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
-      restVoiceRecorder = new MediaRecorder(stream, { mimeType });
-      restVoiceChunks = [];
-      restVoiceRecorder.ondataavailable = e => { if (e.data.size > 0) restVoiceChunks.push(e.data); };
-      restVoiceRecorder.onstop = () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(restVoiceChunks, { type: mimeType });
-        const reader = new FileReader();
-        reader.onloadend = () => sendVoiceMsg(companyId, reader.result);
-        reader.readAsDataURL(blob);
-      };
-      restVoiceRecorder.start();
-      restIsRecording = true;
-      document.getElementById('recordBtn')?.classList.add('recording');
-      let secs = 0;
-      restVoiceTimer = setInterval(() => {
-        secs++;
-        const t = document.getElementById('recordTimer');
-        if (t) t.textContent = `${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`;
-        if (secs >= 120) toggleVoiceRecord(companyId);
-      }, 1000);
-    }).catch(() => toast('Microphone inaccessible', 'error'));
-  }
-}
-
-async function sendVoiceMsg(companyId, audioData) {
-  const restId = parseInt(localStorage.getItem('fc_id'));
-  try {
-    await apiFetch('/api/messages', { method: 'POST', body: { companyId, restaurantId: restId, content: '🎙 Message vocal', messageType: 'voice', audioData } }, token);
-    loadMessages(companyId);
-  } catch(e) { toast('Erreur envoi vocal', 'error'); }
-}
-
-async function openChat(companyId, companyName, photo) {
-  currentChatCompanyId = companyId;
-  restIsRecording = false;
-  clearRestFile();
-  await apiFetch('/api/messages/read', { method: 'PUT', body: JSON.stringify({ companyId, restaurantId: parseInt(localStorage.getItem('fc_id')) }) }, token);
-  const main = document.getElementById('chatMain');
-  main.innerHTML = `
-    <div class="chat-header">
-      <div class="user-avatar" style="width:30px;height:30px;font-size:14px">${photo?`<img src="${photo}">`:'🏢'}</div>
-      ${companyName}
-    </div>
-    <div class="chat-messages" id="chatMessages"></div>
-    <div class="file-preview-bar" id="restFilePreviewBar" style="display:none"></div>
-    <div class="chat-input-area">
-      <button class="attach-btn" onclick="openRestFileUpload()" title="Joindre un fichier">📎</button>
-      <input class="chat-input" id="chatInput" placeholder="Votre message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg(${companyId})}">
-      <span class="record-timer" id="recordTimer"></span>
-      <button class="record-btn" id="recordBtn" onclick="toggleVoiceRecord(${companyId})" title="Message vocal">🎙</button>
-      <button class="btn btn-primary btn-sm" onclick="sendMsg(${companyId})">Envoyer</button>
-    </div>
-  `;
-  loadMessages(companyId);
-  loadConversations();
-}
-
-function renderMsg(m, isSenderRestaurant) {
-  const out = m.sender_type === 'restaurant';
-  const cls = out ? 'msg-out' : 'msg-in';
-  const audioSrc = m.audio_url || m.audio_data;
-  const fileSrc = m.file_url || m.file_data;
-  if (m.message_type === 'voice' && audioSrc) {
-    return `<div class="msg ${cls}"><div class="msg-voice"><div class="voice-badge">🎙 Message vocal</div><audio controls src="${audioSrc}"></audio><div class="msg-time">${timeAgo(m.created_at)}</div></div></div>`;
-  }
-  if (m.message_type === 'file' && fileSrc) {
-    let inner = '';
-    if (m.file_mime?.startsWith('image/')) {
-      inner = `<img src="${fileSrc}" onclick="window.open('${fileSrc}','_blank')" alt="${m.file_name||'image'}">`;
-    } else if (m.file_mime?.startsWith('video/')) {
-      inner = `<video controls><source src="${fileSrc}" type="${m.file_mime}"></video>`;
-    } else {
-      inner = `<a class="msg-file-doc" href="${fileSrc}" download="${m.file_name||'document'}">📄<span>${m.file_name||'Document'}</span></a>`;
-    }
-    const caption = m.content && !['📷 Photo','🎬 Vidéo'].includes(m.content) && !m.content.startsWith('📄') ? `<div style="font-size:12px;margin-top:3px">${m.content}</div>` : '';
-    return `<div class="msg ${cls}"><div class="msg-file">${inner}${caption}<div class="msg-time">${timeAgo(m.created_at)}</div></div></div>`;
-  }
-  return `<div class="msg ${cls}">${m.content}<div class="msg-time">${timeAgo(m.created_at)}</div></div>`;
-}
-
-async function loadMessages(companyId) {
-  const restId = parseInt(localStorage.getItem('fc_id'));
-  try {
-    const msgs = await apiFetch(`/api/messages?companyId=${companyId}&restaurantId=${restId}`, {}, token);
-    const el = document.getElementById('chatMessages');
-    if (!el) return;
-    el.innerHTML = msgs.map(m => renderMsg(m, true)).join('');
-    el.scrollTop = el.scrollHeight;
-  } catch(e) {}
-}
-
-async function sendMsg(companyId) {
-  const input = document.getElementById('chatInput');
-  const text = input?.value.trim();
-  const restId = parseInt(localStorage.getItem('fc_id'));
-  try {
-    if (pendingRestFile) {
-      const caption = text || (pendingRestFile.type === 'image' ? '📷 Photo' : pendingRestFile.type === 'video' ? '🎬 Vidéo' : `📄 ${pendingRestFile.name}`);
-      await apiFetch('/api/messages', { method: 'POST', body: { companyId, restaurantId: restId, content: caption, messageType: 'file', fileData: pendingRestFile.data, fileName: pendingRestFile.name, fileMime: pendingRestFile.mime } }, token);
-      if (input) input.value = '';
-      clearRestFile();
-    } else if (text) {
-      await apiFetch('/api/messages', { method: 'POST', body: JSON.stringify({ companyId, restaurantId: restId, content: text }) }, token);
-      input.value = '';
-    } else { return; }
-    loadMessages(companyId);
-  } catch(e) { toast('Erreur envoi', 'error'); }
-}
-
-function startMsgPolling() {
-  if (msgInterval) clearInterval(msgInterval);
-  msgInterval = setInterval(() => { loadConversations(); if (currentChatCompanyId) loadMessages(currentChatCompanyId); }, 3000);
-}
-
-function exportPDF(period) {
-  fetch(`/api/restaurant/export-pdf?period=${period}`, { headers: { 'Authorization': `Bearer ${token}` } })
-    .then(r => r.blob()).then(blob => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `rapport_${period}.pdf`; a.click(); URL.revokeObjectURL(url);
-    }).catch(() => toast('Erreur export PDF', 'error'));
-}
-
-// Expose functions globally
+// Expose ALL functions to global window
 window.logout = logout;
+window.switchToPage = switchToPage;
+window.loadOrders = loadOrders;
+window.loadMenus = loadMenus;
 window.addMenu = addMenu;
 window.editMenu = editMenu;
-window.delMenu = deleteMenu;
 window.deleteMenu = deleteMenu;
 window.toggleMenu = toggleMenu;
 window.saveProfile = saveProfile;
 window.changeRestPassword = changeRestPassword;
-window.saveSpecialties = saveSpecialties;
-window.savePayments = savePayments;
-window.openDeleteModal = openDeleteModal;
-window.deleteAccount = deleteAccount;
 window.sendInvoice = sendInvoice;
 window.loadInvoices = loadInvoices;
-window.downloadRestInvoice = downloadRestInvoice;
-window.printRestInvoice = printRestInvoice;
-window.switchToPage = switchToPage;
-window.loadMessages = loadMessages;
-window.sendMessage = sendMessage;
-window.toggleVoiceRecord = toggleVoiceRecord;
+window.loadDashboard = loadDashboard;
+window.loadRatings = loadRatings;
+window.loadProfile = loadProfile;
 window.openChat = openChat;
-window.sendMsg = sendMsg;
-window.openRestFileUpload = openRestFileUpload;
 window.loadConversations = loadConversations;
 window.loadMessages = loadMessages;
+window.sendMsg = sendMsg;
+window.openRestFileUpload = openRestFileUpload;
 window.toggleVoiceRecord = toggleVoiceRecord;
-window.sendMessage = sendMessage;
-window.clearRestFile = clearRestFile;
-window.exportPDF = exportPDF;
-window.exportOrdersPDF = exportOrdersPDF;
-window.loadOrders = loadOrders;
-window.loadMenus = loadMenus;
-window.openInvoiceModal = openInvoiceModal;
 window.createBatchForCompany = createBatchForCompany;
 window.createInvoiceForCompany = createInvoiceForCompany;
+window.saveSpecialties = saveSpecialties;
+window.savePayments = savePayments;
+window.deleteAccount = deleteAccount;
+window.exportPDF = exportPDF;
+window.exportOrdersPDF = exportOrdersPDF;
+window.downloadRestInvoice = downloadRestInvoice;
+window.printRestInvoice = printRestInvoice;
+window.clearRestFile = clearRestFile;
+window.openInvoiceModal = openInvoiceModal;
+window.sendMessage = sendMessage;
+window.confirmBatch = confirmBatch;
 }); // end DOMContentLoaded
 </script>
 </body>
