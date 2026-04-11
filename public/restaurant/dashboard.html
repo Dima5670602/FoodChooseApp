@@ -472,28 +472,7 @@ function initSidebar() {
 }
 
 // ─── Navigation ───────────────────────────────────────
-// Gère le système de navigation entre "pages" (qui sont en fait des sections affichées/cachées par CSS).
-// On reçoit une callback onSwitch pour que chaque page puisse réagir au changement (ex: charger des données).
-function initNav(defaultPage, onSwitch) {
-  document.querySelectorAll('.nav-item[data-page]').forEach(item => {
-    item.addEventListener('click', () => {
-      const page = item.dataset.page;
-      // On retire l'état actif de tous les items avant d'en activer un seul — propre et sans effet de bord
-      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      item.classList.add('active');
-      const pg = document.getElementById(`page-${page}`);
-      if (pg) pg.classList.add('active');
-      // Met à jour le titre de la page dans le header pour que l'utilisateur sache où il est
-      const tb = document.getElementById('pageTitle');
-      if (tb) tb.textContent = item.querySelector('span:not(.icon):not(.nav-badge)')?.textContent.trim() || item.textContent.trim();
-      // Sur mobile, on ferme automatiquement la sidebar quand on navigue — sinon elle resterait ouverte par-dessus le contenu
-      document.getElementById('sidebar')?.classList.remove('open');
-      document.getElementById('sidebarOverlay')?.classList.remove('open');
-      if (onSwitch) onSwitch(page);
-    });
-  });
-}
+// Note: initNav from utils.js is used for navigation with callback support.
 
 // ─── Date helpers ─────────────────────────────────────
 // Retourne la date du jour au format YYYY-MM-DD, utile pour pré-remplir des champs de formulaire ou filtrer des données.

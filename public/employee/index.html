@@ -569,12 +569,6 @@ async function fpVerifyOtp() { const email=document.getElementById('fp-email').v
  */
 async function fpResetPassword() { const email=document.getElementById('fp-email').value.trim(); const otp=document.getElementById('fp-otp').value.trim(); const pwd=document.getElementById('fp-pwd').value; const pwd2=document.getElementById('fp-pwd2').value; const errEl=document.getElementById('fp-err3'); errEl.style.display='none'; if(pwd!==pwd2){errEl.textContent='Les mots de passe ne correspondent pas';errEl.style.display='block';return;} if(pwd.length<6){errEl.textContent='Minimum 6 caractères';errEl.style.display='block';return;} try{ await apiFetch('/api/auth/reset-password',{method:'POST',body:JSON.stringify({email,userType:_fpType,otp,newPassword:pwd})}); toast('Mot de passe changé ! Connectez-vous.','success'); closeForgotModal(); }catch(e){errEl.textContent=e.message;errEl.style.display='block';} }
 
-// ── Auto-login si un token valide est déjà présent en localStorage ──
-// Si le rôle stocké est 'employee', on passe directement à l'application
-if (empToken && localStorage.getItem('fc_role') === 'employee') {
-  showApp();
-}
-
 // ══════════════════════════════════════════════════════════════════
 // MODULE : AUTHENTIFICATION
 // ══════════════════════════════════════════════════════════════════
